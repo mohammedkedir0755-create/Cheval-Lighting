@@ -1,38 +1,44 @@
+
 "use strict";
 
-/* STORAGE */
+/* =========================================================
+   CHEVAL LIGHTING STORE
+   Supabase cloud database connection
+   ========================================================= */
 
-const PRODUCTS_KEY = "cheval_products_v1";
-const SALES_KEY = "cheval_sales_v1";
+const SUPABASE_URL = "https://zuvsognjxyzbcdjxhnpg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_AhjYKXSkqXvjb8C9pd3ARQ_Z2o_13mr";
+
+if (!window.supabase) {
+  alert("Supabase could not load. Check your internet connection and refresh.");
+}
+
+const supabaseClient = window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+const STORAGE_BUCKET = "product-images";
+
 const CART_KEY = "cheval_cart_v1";
 const WISH_KEY = "cheval_wishlist_v1";
-const ADMIN_PIN_KEY = "cheval_admin_pin_v1";
+const LANGUAGE_KEY = "cheval_language";
 
-let products = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || "[]");
-let sales = JSON.parse(localStorage.getItem(SALES_KEY) || "[]");
+let products = [];
+let sales = [];
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
 let wishlist = JSON.parse(localStorage.getItem(WISH_KEY) || "[]");
 
 let currentCategory = "All";
-let language = localStorage.getItem("cheval_language") || "en";
-let adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
+let language = localStorage.getItem(LANGUAGE_KEY) || "en";
+let currentUser = null;
+let isOwner = false;
+let customerAuthMode = "login";
+let currentGalleryPhotos = [];
+let currentGalleryIndex = 0;
 
-/* SAVE DATA */
-
-function saveAll() {
-  try {
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
-    localStorage.setItem(WISH_KEY, JSON.stringify(wishlist));
-    return true;
-  } catch (error) {
-    alert(
-      "Your browser storage is full. Try using smaller photos or fewer photos."
-    );
-    return false;
-  }
-}
+/* =========================================================
+   GENERAL HELPERS
+   ========================================================= */
 
 function money(value) {
   return Number(value || 0).toLocaleString("en-US") + " ETB";
@@ -54,9 +60,32 @@ function createId() {
     : Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-/* PRODUCT PHOTO HELPERS */
+function saveLocalPreferences() {
+  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+  localStorage.setItem(WISH_KEY, JSON.stringify(wishlist));
+}
 
-/* Supports both new multiple-photo products and older single-photo products. */
+function showMessage(id, message, isError = false) {
+  const element = document.getElementById(id);
+  if (!element) return;
+
+  element.textContent = message;
+  element.style.color = isError ? "#ed1734" : "#20c878";
+}
+
+function setButtonLoading(button, loading, loadingText = "Please wait...") {
+  if (!button) return;
+
+  if (loading) {
+    button.dataset.originalText = button.textContent;
+    button.textContent = loadingText;
+    button.disabled = true;
+  } else {
+    button.textContent = button.dataset.originalText || button.textContent;
+    button.disabled = false;
+  }
+}
+
 function getProductPhotos(product) {
   if (Array.isArray(product.photos)) {
     return product.photos.filter(
@@ -64,70 +93,148 @@ function getProductPhotos(product) {
     );
   }
 
-  if (product.photo) {
-    return [product.photo];
-  }
+  if (product.photo) return [product.photo];
 
   return [];
 }
 
-function getProductPhotoHTML(product) {
-  const photos = getProductPhotos(product);
-
-  if (photos.length) {
-    return `
-      <button
-        type="button"
-        class="product-photo-button"
-        onclick="openProductGallery('${product.id}')"
-        aria-label="View photos of ${escapeHTML(product.name)}"
-      >
-        <img src="${photos[0]}" alt="${escapeHTML(product.name)}">
-        <span>View Photos (${photos.length})</span>
-      </button>
-    `;
-  }
-
-  return `
-    <button
-      type="button"
-      class="product-photo-button no-product-photo"
-      onclick="openProductGallery('${product.id}')"
-    >
-      <span>No photo available</span>
-      <small>View product</small>
-    </button>
-  `;
+/* Convert a database product into the format used by the website. */
+function mapDatabaseProduct(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    price: row.price === null ? null : Number(row.price),
+    stock: Number(row.stock || 0),
+    sold: Number(row.sold || 0),
+    description: row.description || "",
+    photos: Array.isArray(row.photos) ? row.photos : []
+  };
 }
 
-function readImageFile(file) {
-  return new Promise((resolve, reject) => {
+/* Convert a database sale into the format used by reports. */
+function mapDatabaseSale(row) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productName: row.product_name,
+    quantity: Number(row.quantity || 0),
+    price: Number(row.price || 0),
+    date: row.sold_at
+  };
+}
+
+/* =========================================================
+   LOAD CLOUD DATA
+   ========================================================= */
+
+async function loadProducts() {
+  const { data, error } = await supabaseClient
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  products = (data || []).map(mapDatabaseProduct);
+  renderProducts();
+}
+
+async function loadSales() {
+  if (!isOwner) {
+    sales = [];
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("sales")
+    .select("*")
+    .order("sold_at", { ascending: false });
+
+  if (error) throw error;
+
+  sales = (data || []).map(mapDatabaseSale);
+}
+
+async function loadCloudData() {
+  try {
+    await loadProducts();
+
+    if (isOwner) {
+      await loadSales();
+      renderAdmin();
+    }
+  } catch (error) {
+    console.error("Cloud data error:", error);
+
+    const grid = document.getElementById("productGrid");
+
+    if (grid) {
+      grid.innerHTML =
+        '<p class="empty-message">Could not load products. Please refresh the page.</p>';
+    }
+
+    showMessage(
+      "productMessage",
+      "Could not load cloud data: " + error.message,
+      true
+    );
+  }
+}
+
+/* =========================================================
+   PRODUCT PHOTOS - SUPABASE STORAGE
+   ========================================================= */
+
+async function uploadProductPhotos(files) {
+  const uploadedUrls = [];
+
+  for (const file of files) {
     if (!file.type.startsWith("image/")) {
-      reject(new Error("Please select image files only."));
-      return;
+      throw new Error("Please select image files only.");
     }
 
     if (file.size > 1500000) {
-      reject(new Error(
-        "Each photo must be smaller than 1.5 MB. Please reduce the photo size."
-      ));
-      return;
+      throw new Error(
+        "Each photo must be smaller than 1.5 MB."
+      );
     }
 
-    const reader = new FileReader();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = createId() + "-" + safeName;
 
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Could not read a photo."));
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from(STORAGE_BUCKET)
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type
+      });
 
-    reader.readAsDataURL(file);
-  });
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabaseClient
+      .storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(path);
+
+    uploadedUrls.push(data.publicUrl);
+  }
+
+  return uploadedUrls;
 }
 
-/* LANGUAGE */
+/* =========================================================
+   LANGUAGE
+   ========================================================= */
 
 function toggleLanguage() {
   language = language === "en" ? "am" : "en";
-  localStorage.setItem("cheval_language", language);
+
+  localStorage.setItem(LANGUAGE_KEY, language);
 
   document.querySelectorAll("[data-en][data-am]").forEach(element => {
     element.textContent = element.dataset[language];
@@ -150,7 +257,153 @@ function toggleLanguage() {
   renderProducts();
 }
 
-/* CUSTOMER PRODUCTS */
+/* =========================================================
+   CUSTOMER PRODUCT PHOTOS AND GALLERY
+   ========================================================= */
+
+function getProductPhotoHTML(product) {
+  const photos = getProductPhotos(product);
+
+  if (photos.length) {
+    return `
+      <button
+        type="button"
+        class="product-photo-button"
+        onclick="openProductGallery('${escapeHTML(product.id)}')"
+        aria-label="View photos of ${escapeHTML(product.name)}"
+      >
+        <img src="${escapeHTML(photos[0])}" alt="${escapeHTML(product.name)}">
+        <span>View Photos (${photos.length})</span>
+      </button>
+    `;
+  }
+
+  return `
+    <button
+      type="button"
+      class="product-photo-button no-product-photo"
+      onclick="openProductGallery('${escapeHTML(product.id)}')"
+    >
+      <span>No photo available</span>
+      <small>View product</small>
+    </button>
+  `;
+}
+
+function openProductGallery(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  currentGalleryPhotos = getProductPhotos(product);
+  currentGalleryIndex = 0;
+
+  closeProductGallery();
+
+  const gallery = document.createElement("div");
+  gallery.id = "productGallery";
+  gallery.className = "gallery-overlay";
+
+  gallery.innerHTML = `
+    <div class="gallery-window">
+      <button
+        type="button"
+        class="gallery-close"
+        onclick="closeProductGallery()"
+        aria-label="Close gallery"
+      >×</button>
+
+      <h2>${escapeHTML(product.name)}</h2>
+
+      <div id="galleryMainImage"></div>
+
+      <div class="gallery-controls">
+        <button type="button" onclick="changeGalleryPhoto(-1)">
+          ❮ Previous
+        </button>
+
+        <span id="galleryCounter"></span>
+
+        <button type="button" onclick="changeGalleryPhoto(1)">
+          Next ❯
+        </button>
+      </div>
+
+      <div id="galleryThumbnails" class="gallery-thumbnails"></div>
+    </div>
+  `;
+
+  gallery.addEventListener("click", event => {
+    if (event.target === gallery) closeProductGallery();
+  });
+
+  document.body.appendChild(gallery);
+  renderGalleryPhoto();
+}
+
+function renderGalleryPhoto() {
+  const main = document.getElementById("galleryMainImage");
+  const counter = document.getElementById("galleryCounter");
+  const thumbnails = document.getElementById("galleryThumbnails");
+
+  if (!main || !counter || !thumbnails) return;
+
+  if (!currentGalleryPhotos.length) {
+    main.innerHTML = '<div class="no-gallery-photo">No photos available yet.</div>';
+    counter.textContent = "0 photos";
+    thumbnails.innerHTML = "";
+    return;
+  }
+
+  main.innerHTML = `
+    <img
+      src="${escapeHTML(currentGalleryPhotos[currentGalleryIndex])}"
+      alt="Product photo"
+    >
+  `;
+
+  counter.textContent =
+    (currentGalleryIndex + 1) + " / " + currentGalleryPhotos.length;
+
+  thumbnails.innerHTML = currentGalleryPhotos.map((photo, index) => `
+    <button
+      type="button"
+      class="gallery-thumb ${index === currentGalleryIndex ? "active" : ""}"
+      onclick="selectGalleryPhoto(${index})"
+      aria-label="Show photo ${index + 1}"
+    >
+      <img src="${escapeHTML(photo)}" alt="Product photo ${index + 1}">
+    </button>
+  `).join("");
+}
+
+function changeGalleryPhoto(direction) {
+  if (!currentGalleryPhotos.length) return;
+
+  currentGalleryIndex =
+    (currentGalleryIndex + direction + currentGalleryPhotos.length) %
+    currentGalleryPhotos.length;
+
+  renderGalleryPhoto();
+}
+
+function selectGalleryPhoto(index) {
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= currentGalleryPhotos.length
+  ) return;
+
+  currentGalleryIndex = index;
+  renderGalleryPhoto();
+}
+
+function closeProductGallery() {
+  document.getElementById("productGallery")?.remove();
+}
+
+/* =========================================================
+   CUSTOMER STORE - PRODUCTS AND CATEGORIES
+   ========================================================= */
 
 function renderProducts() {
   const grid = document.getElementById("productGrid");
@@ -186,7 +439,6 @@ function renderProducts() {
 
       return `
         <article class="product-card">
-
           ${getProductPhotoHTML(product)}
 
           <div class="product-info">
@@ -208,17 +460,17 @@ function renderProducts() {
             <div class="product-actions">
               ${
                 available
-                  ? `<button onclick="addToCart('${product.id}')">Add to Cart</button>`
+                  ? `<button onclick="addToCart('${escapeHTML(product.id)}')">Add to Cart</button>`
                   : `<button disabled>Unavailable</button>`
               }
 
-              <button onclick="toggleWishlist('${product.id}')">
+              <button onclick="toggleWishlist('${escapeHTML(product.id)}')">
                 ${wishlist.includes(product.id) ? "♥ Saved" : "♡ Wishlist"}
               </button>
 
               <button
                 type="button"
-                onclick="openProductGallery('${product.id}')"
+                onclick="openProductGallery('${escapeHTML(product.id)}')"
               >
                 View Photos
               </button>
@@ -238,12 +490,16 @@ function renderCategories() {
   const area = document.getElementById("categories");
   if (!area) return;
 
-  const categories = ["All", ...new Set(products.map(p => p.category))];
+  const categories = [
+    "All",
+    ...new Set(products.map(p => p.category).filter(Boolean))
+  ];
 
   area.innerHTML = categories.map(category => `
     <button
       class="category-btn ${currentCategory === category ? "active" : ""}"
-      onclick="selectCategory('${escapeHTML(category)}')">
+      onclick="selectCategory('${escapeHTML(category)}')"
+    >
       ${escapeHTML(category)}
     </button>
   `).join("");
@@ -254,133 +510,9 @@ function selectCategory(category) {
   renderProducts();
 }
 
-/* PRODUCT PHOTO GALLERY */
-
-let currentGalleryPhotos = [];
-let currentGalleryIndex = 0;
-
-function openProductGallery(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-
-  currentGalleryPhotos = getProductPhotos(product);
-  currentGalleryIndex = 0;
-
-  closeProductGallery();
-
-  const gallery = document.createElement("div");
-  gallery.id = "productGallery";
-  gallery.className = "gallery-overlay";
-
-  gallery.innerHTML = `
-    <div class="gallery-window">
-
-      <button
-        type="button"
-        class="gallery-close"
-        onclick="closeProductGallery()"
-        aria-label="Close gallery"
-      >×</button>
-
-      <h2>${escapeHTML(product.name)}</h2>
-
-      <div id="galleryMainImage"></div>
-
-      <div class="gallery-controls">
-        <button type="button" onclick="changeGalleryPhoto(-1)">
-          ❮ Previous
-        </button>
-
-        <span id="galleryCounter"></span>
-
-        <button type="button" onclick="changeGalleryPhoto(1)">
-          Next ❯
-        </button>
-      </div>
-
-      <div id="galleryThumbnails" class="gallery-thumbnails"></div>
-    </div>
-  `;
-
-  gallery.addEventListener("click", function(event) {
-    if (event.target === gallery) {
-      closeProductGallery();
-    }
-  });
-
-  document.body.appendChild(gallery);
-  renderGalleryPhoto();
-}
-
-function renderGalleryPhoto() {
-  const main = document.getElementById("galleryMainImage");
-  const counter = document.getElementById("galleryCounter");
-  const thumbnails = document.getElementById("galleryThumbnails");
-
-  if (!main || !counter || !thumbnails) return;
-
-  if (!currentGalleryPhotos.length) {
-    main.innerHTML = `
-      <div class="no-gallery-photo">
-        No photos available yet.
-      </div>
-    `;
-
-    counter.textContent = "0 photos";
-    thumbnails.innerHTML = "";
-    return;
-  }
-
-  main.innerHTML = `
-    <img
-      src="${currentGalleryPhotos[currentGalleryIndex]}"
-      alt="Product photo"
-    >
-  `;
-
-  counter.textContent =
-    (currentGalleryIndex + 1) + " / " + currentGalleryPhotos.length;
-
-  thumbnails.innerHTML = currentGalleryPhotos.map((photo, index) => `
-    <button
-      type="button"
-      class="gallery-thumb ${index === currentGalleryIndex ? "active" : ""}"
-      onclick="selectGalleryPhoto(${index})"
-      aria-label="Show photo ${index + 1}"
-    >
-      <img src="${photo}" alt="Product photo ${index + 1}">
-    </button>
-  `).join("");
-}
-
-function changeGalleryPhoto(direction) {
-  if (!currentGalleryPhotos.length) return;
-
-  currentGalleryIndex =
-    (currentGalleryIndex + direction + currentGalleryPhotos.length) %
-    currentGalleryPhotos.length;
-
-  renderGalleryPhoto();
-}
-
-function selectGalleryPhoto(index) {
-  if (
-    !Number.isInteger(index) ||
-    index < 0 ||
-    index >= currentGalleryPhotos.length
-  ) {
-    return;
-  }
-
-  currentGalleryIndex = index;
-  renderGalleryPhoto();
-}
-
-function closeProductGallery() {
-  document.getElementById("productGallery")?.remove();
-}
-
-/* WISHLIST */
+/* =========================================================
+   WISHLIST
+   ========================================================= */
 
 function toggleWishlist(id) {
   if (wishlist.includes(id)) {
@@ -389,7 +521,7 @@ function toggleWishlist(id) {
     wishlist.push(id);
   }
 
-  saveAll();
+  saveLocalPreferences();
   renderProducts();
 }
 
@@ -402,23 +534,20 @@ function renderWishlist() {
   area.innerHTML = saved.length
     ? saved.map(product => `
         <article class="product-card">
-
           ${getProductPhotoHTML(product)}
 
           <div class="product-info">
             <h3>${escapeHTML(product.name)}</h3>
 
             ${
-              product.price !== null &&
-              product.price !== undefined &&
-              product.price !== ""
+              product.price !== null && product.price !== undefined
                 ? `<p class="product-price">${money(product.price)}</p>`
                 : `<p class="contact-price">Contact us for price</p>`
             }
 
             <button
               class="secondary-btn"
-              onclick="toggleWishlist('${product.id}')"
+              onclick="toggleWishlist('${escapeHTML(product.id)}')"
             >
               Remove ♥
             </button>
@@ -428,12 +557,14 @@ function renderWishlist() {
     : '<p class="empty-message">Your wishlist is empty.</p>';
 }
 
-/* SHOPPING CART */
+/* =========================================================
+   SHOPPING CART
+   ========================================================= */
 
 function addToCart(id) {
   const product = products.find(p => p.id === id);
 
-  if (!product || product.stock <= 0) {
+  if (!product || Number(product.stock) <= 0) {
     alert("This product is currently unavailable.");
     return;
   }
@@ -451,13 +582,13 @@ function addToCart(id) {
     cart.push({ id, quantity: 1 });
   }
 
-  saveAll();
+  saveLocalPreferences();
   renderCart();
 }
 
 function removeFromCart(id) {
   cart = cart.filter(item => item.id !== id);
-  saveAll();
+  saveLocalPreferences();
   renderCart();
 }
 
@@ -472,7 +603,7 @@ function renderCart() {
 
   if (countArea) {
     countArea.textContent = validCart.reduce(
-      (sum, item) => sum + item.quantity, 0
+      (sum, item) => sum + Number(item.quantity || 0), 0
     );
   }
 
@@ -504,187 +635,396 @@ function renderCart() {
           <div class="cart-row">
             <span>${escapeHTML(product.name)} × ${item.quantity}</span>
             <strong>${priceText}</strong>
-            <button onclick="removeFromCart('${product.id}')">Remove</button>
+            <button onclick="removeFromCart('${escapeHTML(product.id)}')">
+              Remove
+            </button>
           </div>
         `;
       }).join("")
-    : '<p>Your shopping cart is empty.</p>';
+    : "<p>Your shopping cart is empty.</p>";
 
   totalArea.textContent = hasUnpricedProduct
     ? "Total: Contact us for price"
     : "Total: " + money(total);
 }
 
-/* SEARCH */
+/* =========================================================
+   SEARCH
+   ========================================================= */
 
 function showSearch() {
   document.getElementById("products")?.scrollIntoView();
   document.getElementById("searchInput")?.focus();
 }
 
-/* CUSTOMER LOGIN PLACEHOLDER */
+/* =========================================================
+   CUSTOMER ACCOUNT - SUPABASE AUTHENTICATION
+   ========================================================= */
 
 function customerLogin() {
-  alert(
-    "Customer accounts will be connected when we add the secure online database."
-  );
-}
+  if (currentUser) {
+    const account = document.getElementById("customerAccount");
 
-/* OWNER LOGIN */
+    if (account) {
+      account.classList.remove("hidden");
+      return;
+    }
+  }
 
-function adminLogin() {
-  const pinInput = document.getElementById("adminPin");
-  const error = document.getElementById("loginError");
+  const overlay = document.getElementById("authOverlay");
 
-  const pin = pinInput.value;
-
-  adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
-
-  if (pin === adminPin) {
-    sessionStorage.setItem("cheval_admin_logged_in", "yes");
-    openAdmin();
-    error.textContent = "";
-  } else {
-    error.textContent = "Incorrect PIN. Please try again.";
+  if (overlay) {
+    overlay.classList.remove("hidden");
+    overlay.style.display = "flex";
   }
 }
 
-function openAdmin() {
-  document.getElementById("loginPanel").hidden = true;
-  document.getElementById("adminDashboard").hidden = false;
-  renderAdmin();
+function closeCustomerLogin() {
+  const overlay = document.getElementById("authOverlay");
+
+  if (overlay) {
+    overlay.classList.add("hidden");
+    overlay.style.display = "none";
+  }
+
+  showMessage("authMessage", "");
 }
 
-function adminLogout() {
-  sessionStorage.removeItem("cheval_admin_logged_in");
+function switchCustomerAuth() {
+  customerAuthMode =
+    customerAuthMode === "login" ? "signup" : "login";
+
+  const title = document.getElementById("authTitle");
+  const description = document.getElementById("authDescription");
+  const submit = document.getElementById("authSubmitButton");
+  const switchButton = document.getElementById("authSwitchButton");
+
+  if (customerAuthMode === "signup") {
+    if (title) title.textContent = "Create Customer Account";
+    if (description) description.textContent = "Create an account to use CHEVAL Lighting.";
+    if (submit) submit.textContent = "Create Account";
+    if (switchButton) switchButton.textContent = "Already have an account? Login";
+  } else {
+    if (title) title.textContent = "Customer Login";
+    if (description) description.textContent = "Sign in to your CHEVAL account.";
+    if (submit) submit.textContent = "Login";
+    if (switchButton) switchButton.textContent = "Create a new account";
+  }
+
+  showMessage("authMessage", "");
+}
+
+async function customerLogout() {
+  if (!supabaseClient) return;
+
+  const { error } = await supabaseClient.auth.signOut();
+
+  if (error) {
+    alert("Could not log out: " + error.message);
+    return;
+  }
+
+  currentUser = null;
+  updateCustomerAccountUI();
+  closeCustomerLogin();
+}
+
+function updateCustomerAccountUI() {
+  const loginButton = document.getElementById("customerLoginButton");
+  const account = document.getElementById("customerAccount");
+  const email = document.getElementById("customerEmail");
+
+  if (currentUser) {
+    if (loginButton) loginButton.classList.add("hidden");
+    if (account) account.classList.remove("hidden");
+    if (email) email.textContent = currentUser.email || "";
+  } else {
+    if (loginButton) loginButton.classList.remove("hidden");
+    if (account) account.classList.add("hidden");
+  }
+}
+
+async function handleCustomerAuth(event) {
+  event.preventDefault();
+
+  if (!supabaseClient) {
+    showMessage("authMessage", "Database connection is unavailable.", true);
+    return;
+  }
+
+  const email = document.getElementById("customerAuthEmail")?.value.trim();
+  const password = document.getElementById("customerAuthPassword")?.value;
+  const button = document.getElementById("authSubmitButton");
+
+  if (!email || !password) {
+    showMessage("authMessage", "Enter your email and password.", true);
+    return;
+  }
+
+  setButtonLoading(button, true);
+
+  try {
+    if (customerAuthMode === "signup") {
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin + window.location.pathname
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        currentUser = data.user;
+        updateCustomerAccountUI();
+        closeCustomerLogin();
+        alert("Your customer account has been created successfully.");
+      } else {
+        showMessage(
+          "authMessage",
+          "Account created. Check your email to confirm your account."
+        );
+      }
+    } else {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      currentUser = data.user;
+      updateCustomerAccountUI();
+      closeCustomerLogin();
+      alert("You are now logged in.");
+    }
+  } catch (error) {
+    showMessage("authMessage", error.message, true);
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+/* =========================================================
+   OWNER LOGIN - OWNER ROLE CHECK
+   ========================================================= */
+
+async function verifyOwner(user) {
+  if (!user) return false;
+
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (error) {
+    console.error("Owner role check:", error);
+    return false;
+  }
+
+  return data?.role === "owner";
+}
+
+async function showOwnerDashboard(user) {
+  currentUser = user;
+  isOwner = true;
+
+  const loginPanel = document.getElementById("loginPanel");
+  const dashboard = document.getElementById("dashboard");
+  const logoutButton = document.getElementById("adminLogoutButton");
+  const ownerEmail = document.getElementById("ownerEmailDisplay");
+
+  if (loginPanel) loginPanel.classList.add("hidden");
+  if (dashboard) dashboard.classList.remove("hidden");
+  if (logoutButton) logoutButton.classList.remove("hidden");
+  if (ownerEmail) ownerEmail.textContent = user.email || "";
+
+  try {
+    await loadCloudData();
+  } catch (error) {
+    showMessage("productMessage", error.message, true);
+  }
+}
+
+async function handleOwnerLogin(event) {
+  event.preventDefault();
+
+  const email = document.getElementById("adminEmail")?.value.trim();
+  const password = document.getElementById("adminPassword")?.value;
+  const button = document.getElementById("adminLoginButton");
+
+  const errorArea = document.getElementById("loginError");
+
+  if (!email || !password) {
+    if (errorArea) errorArea.textContent = "Enter your email and password.";
+    return;
+  }
+
+  setButtonLoading(button, true, "Signing in...");
+
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) throw error;
+
+    const ownerIsValid = await verifyOwner(data.user);
+
+    if (!ownerIsValid) {
+      await supabaseClient.auth.signOut();
+      throw new Error("This account does not have owner permission.");
+    }
+
+    if (errorArea) errorArea.textContent = "";
+
+    await showOwnerDashboard(data.user);
+  } catch (error) {
+    if (errorArea) errorArea.textContent = error.message;
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function adminLogout() {
+  const { error } = await supabaseClient.auth.signOut();
+
+  if (error) {
+    alert("Could not log out: " + error.message);
+    return;
+  }
+
+  currentUser = null;
+  isOwner = false;
   location.reload();
 }
 
-/* CHANGE OWNER PASSWORD */
+/* =========================================================
+   CHANGE OWNER PASSWORD
+   ========================================================= */
 
-const changePasswordForm = document.getElementById("changePasswordForm");
+async function handlePasswordChange(event) {
+  event.preventDefault();
 
-if (changePasswordForm) {
-  changePasswordForm.addEventListener("submit", function(event) {
-    event.preventDefault();
+  const newPassword = document.getElementById("newPassword").value;
+  const confirmPassword = document.getElementById("confirmPassword").value;
 
-    const currentPassword =
-      document.getElementById("currentPassword").value;
+  if (newPassword.length < 8) {
+    showMessage(
+      "passwordMessage",
+      "Password must contain at least 8 characters.",
+      true
+    );
+    return;
+  }
 
-    const newPassword =
-      document.getElementById("newPassword").value;
+  if (newPassword !== confirmPassword) {
+    showMessage("passwordMessage", "Passwords do not match.", true);
+    return;
+  }
 
-    const confirmPassword =
-      document.getElementById("confirmPassword").value;
-
-    adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
-
-    if (currentPassword !== adminPin) {
-      alert("Your current password is incorrect.");
-      return;
-    }
-
-    if (newPassword.length < 4) {
-      alert("Your new password must contain at least 4 characters.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      alert("The new passwords do not match.");
-      return;
-    }
-
-    if (newPassword === currentPassword) {
-      alert("Your new password must be different from the current password.");
-      return;
-    }
-
-    localStorage.setItem(ADMIN_PIN_KEY, newPassword);
-    adminPin = newPassword;
-
-    changePasswordForm.reset();
-
-    alert("Your owner password has been changed successfully!");
+  const { error } = await supabaseClient.auth.updateUser({
+    password: newPassword
   });
+
+  if (error) {
+    showMessage("passwordMessage", error.message, true);
+    return;
+  }
+
+  document.getElementById("changePasswordForm").reset();
+
+  showMessage(
+    "passwordMessage",
+    "Your owner password has been updated successfully."
+  );
 }
 
-/* ADD PRODUCT WITH MULTIPLE PHOTOS */
+/* =========================================================
+   ADD PRODUCT
+   ========================================================= */
 
-const productForm = document.getElementById("productForm");
+async function handleAddProduct(event) {
+  event.preventDefault();
 
-if (productForm) {
-  productForm.addEventListener("submit", async function(event) {
-    event.preventDefault();
+  const name = document.getElementById("productName").value.trim();
+  const category = document.getElementById("productCategory").value;
+  const priceInput = document.getElementById("productPrice").value.trim();
+  const stock = Number(document.getElementById("productStock").value);
+  const description =
+    document.getElementById("productDescription").value.trim();
 
-    const files = Array.from(
-      document.getElementById("productPhoto").files
-    );
+  const files = Array.from(
+    document.getElementById("productPhoto").files
+  );
 
-    const name = document.getElementById("productName").value.trim();
-    const category = document.getElementById("productCategory").value;
-    const priceInput = document.getElementById("productPrice").value.trim();
-    const stock = Number(document.getElementById("productStock").value);
-    const description =
-      document.getElementById("productDescription").value.trim();
+  const price = priceInput === "" ? null : Number(priceInput);
 
-    const price = priceInput === "" ? null : Number(priceInput);
+  if (
+    !name ||
+    !category ||
+    !Number.isInteger(stock) ||
+    stock < 0 ||
+    (price !== null && (!Number.isFinite(price) || price < 0))
+  ) {
+    showMessage("productMessage", "Please check all product information.", true);
+    return;
+  }
 
-    if (
-      !name ||
-      !category ||
-      !Number.isInteger(stock) ||
-      stock < 0 ||
-      (price !== null && (!Number.isFinite(price) || price < 0))
-    ) {
-      alert("Please check the product information.");
-      return;
-    }
+  const button = document.getElementById("addProductButton");
+  setButtonLoading(button, true, "Saving product...");
 
-    try {
-      const photos = await Promise.all(files.map(readImageFile));
+  try {
+    const photos = files.length
+      ? await uploadProductPhotos(files)
+      : [];
 
-      const product = {
-        id: createId(),
+    const { data, error } = await supabaseClient
+      .from("products")
+      .insert([{
         name,
         category,
         price,
         stock,
         sold: 0,
         description,
-        photos,
-        photo: photos[0] || ""
-      };
+        photos
+      }])
+      .select()
+      .single();
 
-      products.push(product);
+    if (error) throw error;
 
-      if (!saveAll()) {
-        products.pop();
-        return;
-      }
+    products.unshift(mapDatabaseProduct(data));
 
-      productForm.reset();
+    document.getElementById("productForm").reset();
 
-      alert("Product added successfully!");
+    renderAdmin();
+    renderProducts();
 
-      renderAdmin();
-      renderProducts();
-
-    } catch (error) {
-      alert(error.message || "Could not save the product photos.");
-    }
-  });
+    showMessage("productMessage", "Product added successfully!");
+  } catch (error) {
+    console.error(error);
+    showMessage("productMessage", error.message, true);
+  } finally {
+    setButtonLoading(button, false);
+  }
 }
 
-/* ADD MORE PHOTOS TO AN EXISTING PRODUCT */
+/* =========================================================
+   ADD MORE PHOTOS TO A PRODUCT
+   ========================================================= */
 
-function addProductPhotos(id) {
+async function addProductPhotos(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
 
   const fileInput = document.createElement("input");
-
   fileInput.type = "file";
-  fileInput.accept = "image/*";
+  fileInput.accept = "image/jpeg,image/png,image/webp";
   fileInput.multiple = true;
   fileInput.style.display = "none";
 
@@ -699,27 +1039,24 @@ function addProductPhotos(id) {
     }
 
     try {
-      const newPhotos = await Promise.all(files.map(readImageFile));
+      const newPhotos = await uploadProductPhotos(files);
+      const updatedPhotos = [...getProductPhotos(product), ...newPhotos];
 
-      const oldPhotos = getProductPhotos(product);
+      const { error } = await supabaseClient
+        .from("products")
+        .update({ photos: updatedPhotos })
+        .eq("id", id);
 
-      product.photos = [...oldPhotos, ...newPhotos];
-      product.photo = product.photos[0] || "";
+      if (error) throw error;
 
-      if (!saveAll()) {
-        product.photos = oldPhotos;
-        product.photo = oldPhotos[0] || "";
-        fileInput.remove();
-        return;
-      }
+      product.photos = updatedPhotos;
 
       renderAdmin();
       renderProducts();
 
       alert("New product photos added successfully!");
-
     } catch (error) {
-      alert(error.message || "Could not add the photos.");
+      alert("Could not add photos: " + error.message);
     }
 
     fileInput.remove();
@@ -728,60 +1065,103 @@ function addProductPhotos(id) {
   fileInput.click();
 }
 
-/* RECORD SALE */
+/* =========================================================
+   RECORD A SALE
+   ========================================================= */
 
-const saleForm = document.getElementById("saleForm");
+async function handleRecordSale(event) {
+  event.preventDefault();
 
-if (saleForm) {
-  saleForm.addEventListener("submit", function(event) {
-    event.preventDefault();
+  const id = document.getElementById("saleProduct").value;
+  const quantity = Number(document.getElementById("saleQuantity").value);
+  const priceInput = document.getElementById("salePrice").value.trim();
 
-    const id = document.getElementById("saleProduct").value;
-    const quantity = Number(
-      document.getElementById("saleQuantity").value
+  const product = products.find(p => p.id === id);
+
+  const price = priceInput === ""
+    ? Number(product?.price)
+    : Number(priceInput);
+
+  if (
+    !product ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0 ||
+    quantity > product.stock ||
+    !Number.isFinite(price) ||
+    price < 0
+  ) {
+    showMessage(
+      "saleMessage",
+      "Check the product, quantity and sale price. The product must have a price.",
+      true
     );
+    return;
+  }
 
-    const priceInput = document.getElementById("salePrice").value.trim();
-    const price = priceInput === "" ? null : Number(priceInput);
+  const button = document.getElementById("recordSaleButton");
+  setButtonLoading(button, true, "Recording sale...");
 
-    const product = products.find(p => p.id === id);
+  try {
+    const newStock = Number(product.stock) - quantity;
+    const newSold = Number(product.sold || 0) + quantity;
 
-    if (
-      !product ||
-      !Number.isInteger(quantity) ||
-      quantity <= 0 ||
-      quantity > product.stock ||
-      (price !== null && (!Number.isFinite(price) || price < 0))
-    ) {
-      alert("Please check the product and quantity.");
-      return;
+    const { error: productError } = await supabaseClient
+      .from("products")
+      .update({
+        stock: newStock,
+        sold: newSold
+      })
+      .eq("id", id);
+
+    if (productError) throw productError;
+
+    const { data: saleData, error: saleError } = await supabaseClient
+      .from("sales")
+      .insert([{
+        product_id: product.id,
+        product_name: product.name,
+        quantity,
+        price,
+        sold_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (saleError) {
+      /* Try to return the stock if the sale could not be saved. */
+      await supabaseClient
+        .from("products")
+        .update({
+          stock: Number(product.stock),
+          sold: Number(product.sold || 0)
+        })
+        .eq("id", id);
+
+      throw saleError;
     }
 
-    product.stock -= quantity;
-    product.sold = Number(product.sold || 0) + quantity;
+    product.stock = newStock;
+    product.sold = newSold;
+    sales.unshift(mapDatabaseSale(saleData));
 
-    sales.push({
-      id: createId(),
-      productId: product.id,
-      productName: product.name,
-      quantity,
-      price,
-      date: new Date().toISOString()
-    });
-
-    saveAll();
-    saleForm.reset();
-
-    document.getElementById("saleMessage").textContent =
-      "Sale recorded successfully! Stock has been updated.";
+    document.getElementById("saleForm").reset();
 
     renderAdmin();
-  });
+    renderProducts();
+
+    showMessage("saleMessage", "Sale recorded successfully!");
+  } catch (error) {
+    showMessage("saleMessage", error.message, true);
+  } finally {
+    setButtonLoading(button, false);
+  }
 }
 
-/* ADD NEW STOCK */
+/* =========================================================
+   ADD STOCK
+   ========================================================= */
 
-function addStock(id) {
+async function addStock(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
 
@@ -794,22 +1174,129 @@ function addStock(id) {
   const quantity = Number(amount);
 
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    alert("Enter a valid whole number greater than zero.");
+    alert("Enter a whole number greater than zero.");
     return;
   }
 
-  product.stock = Number(product.stock || 0) + quantity;
+  const newStock = Number(product.stock || 0) + quantity;
 
-  saveAll();
+  const { error } = await supabaseClient
+    .from("products")
+    .update({ stock: newStock })
+    .eq("id", id);
+
+  if (error) {
+    alert("Could not update stock: " + error.message);
+    return;
+  }
+
+  product.stock = newStock;
+
   renderAdmin();
+  renderProducts();
 
   alert(quantity + " units added to stock.");
 }
 
-/* INVENTORY TABLE AND DASHBOARD */
+/* =========================================================
+   EDIT PRODUCT
+   ========================================================= */
+
+async function editProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  const newName = prompt("Product name:", product.name);
+  if (newName === null) return;
+
+  const newCategory = prompt("Category:", product.category);
+  if (newCategory === null) return;
+
+  const newPrice = prompt(
+    "Selling price (leave empty for no price):",
+    product.price ?? ""
+  );
+  if (newPrice === null) return;
+
+  const newDescription = prompt(
+    "Description (optional):",
+    product.description || ""
+  );
+  if (newDescription === null) return;
+
+  const price = newPrice.trim() === "" ? null : Number(newPrice);
+
+  if (
+    !newName.trim() ||
+    !newCategory.trim() ||
+    (price !== null && (!Number.isFinite(price) || price < 0))
+  ) {
+    alert("Please enter valid product information.");
+    return;
+  }
+
+  const changes = {
+    name: newName.trim(),
+    category: newCategory.trim(),
+    price,
+    description: newDescription.trim()
+  };
+
+  const { error } = await supabaseClient
+    .from("products")
+    .update(changes)
+    .eq("id", id);
+
+  if (error) {
+    alert("Could not update product: " + error.message);
+    return;
+  }
+
+  Object.assign(product, changes);
+
+  renderAdmin();
+  renderProducts();
+
+  alert("Product updated successfully.");
+}
+
+/* =========================================================
+   DELETE PRODUCT
+   ========================================================= */
+
+async function deleteProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  if (!confirm("Delete " + product.name + "?")) return;
+
+  const { error } = await supabaseClient
+    .from("products")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert("Could not delete product: " + error.message);
+    return;
+  }
+
+  products = products.filter(p => p.id !== id);
+  cart = cart.filter(item => item.id !== id);
+  wishlist = wishlist.filter(item => item !== id);
+
+  saveLocalPreferences();
+
+  renderAdmin();
+  renderProducts();
+}
+
+/* =========================================================
+   ADMIN DASHBOARD AND INVENTORY
+   ========================================================= */
 
 function renderAdmin() {
-  if (!document.getElementById("adminDashboard")) return;
+  const dashboard = document.getElementById("dashboard");
+  if (!dashboard || !isOwner) return;
 
   const totalStock = products.reduce(
     (sum, p) => sum + Number(p.stock || 0), 0
@@ -830,128 +1317,72 @@ function renderAdmin() {
 
   const table = document.getElementById("inventoryTable");
 
-  table.innerHTML = products.map(p => {
-    const hasPrice =
-      p.price !== null &&
-      p.price !== undefined &&
-      p.price !== "";
+  if (table) {
+    table.innerHTML = products.map(p => {
+      const photoCount = getProductPhotos(p).length;
 
-    const photoCount = getProductPhotos(p).length;
+      return `
+        <tr>
+          <td>${escapeHTML(p.name)}</td>
+          <td>${escapeHTML(p.category)}</td>
+          <td>${p.price === null ? "Not set" : money(p.price)}</td>
+          <td>${Number(p.stock || 0)}</td>
+          <td>${Number(p.sold || 0)}</td>
+          <td>
+            <button type="button"
+              onclick="addProductPhotos('${escapeHTML(p.id)}')">
+              Add Photos
+            </button>
 
-    return `
-      <tr>
-        <td>${getProductPhotoHTML(p)}</td>
+            <span class="photo-count">${photoCount} photo(s)</span>
 
-        <td>${escapeHTML(p.name)}</td>
+            <button type="button"
+              onclick="addStock('${escapeHTML(p.id)}')">
+              Add Stock
+            </button>
 
-        <td>${hasPrice ? money(p.price) : "Not set"}</td>
+            <button type="button"
+              onclick="editProduct('${escapeHTML(p.id)}')">
+              Edit
+            </button>
 
-        <td>${Number(p.stock || 0)}</td>
+            <button type="button"
+              class="danger"
+              onclick="deleteProduct('${escapeHTML(p.id)}')">
+              Delete
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
 
-        <td>${Number(p.sold || 0)}</td>
-
-        <td>
-          <button
-            class="action-btn"
-            onclick="addProductPhotos('${p.id}')"
-          >
-            Add Photos
-          </button>
-
-          <span class="photo-count">${photoCount} photo(s)</span>
-
-          <button
-            class="action-btn"
-            onclick="addStock('${p.id}')"
-          >Add Stock</button>
-
-          <button
-            class="action-btn"
-            onclick="editProduct('${p.id}')"
-          >Edit</button>
-
-          <button
-            class="action-btn"
-            onclick="deleteProduct('${p.id}')"
-          >Delete</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
-
-  if (!products.length) {
-    table.innerHTML =
-      '<tr><td colspan="6">No products added yet.</td></tr>';
+    if (!products.length) {
+      table.innerHTML =
+        '<tr><td colspan="6">No products added yet.</td></tr>';
+    }
   }
 
   const select = document.getElementById("saleProduct");
 
-  select.innerHTML = products.length
-    ? products.filter(p => p.stock > 0).map(p =>
-        `<option value="${p.id}">${escapeHTML(p.name)} (${p.stock} available)</option>`
-      ).join("")
-    : '<option value="">Add products first</option>';
+  if (select) {
+    const availableProducts = products.filter(p => Number(p.stock) > 0);
 
-  if (!products.some(p => p.stock > 0)) {
-    select.innerHTML = '<option value="">No products in stock</option>';
+    select.innerHTML = availableProducts.length
+      ? '<option value="">Choose product</option>' +
+        availableProducts.map(p => `
+          <option value="${escapeHTML(p.id)}">
+            ${escapeHTML(p.name)} (${Number(p.stock)} available)
+          </option>
+        `).join("")
+      : '<option value="">No products in stock</option>';
   }
 
   renderSalesReport();
 }
 
-/* EDIT AND DELETE PRODUCTS */
-
-function editProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-
-  const newName = prompt("Product name:", product.name);
-  if (newName === null) return;
-
-  const newPrice = prompt(
-    "Selling price (leave empty for no price):",
-    product.price ?? ""
-  );
-  if (newPrice === null) return;
-
-  const newDescription = prompt(
-    "Description (optional):",
-    product.description || ""
-  );
-  if (newDescription === null) return;
-
-  const price = newPrice.trim() === "" ? null : Number(newPrice);
-
-  if (
-    !newName.trim() ||
-    (price !== null && (!Number.isFinite(price) || price < 0))
-  ) {
-    alert("Please enter valid information.");
-    return;
-  }
-
-  product.name = newName.trim();
-  product.price = price;
-  product.description = newDescription.trim();
-
-  saveAll();
-  renderAdmin();
-  renderProducts();
-}
-
-function deleteProduct(id) {
-  if (!confirm("Are you sure you want to delete this product?")) return;
-
-  products = products.filter(p => p.id !== id);
-  cart = cart.filter(item => item.id !== id);
-  wishlist = wishlist.filter(item => item !== id);
-
-  saveAll();
-  renderAdmin();
-  renderProducts();
-}
-
-/* STOCK AND SALES REPORTS */
+/* =========================================================
+   SALES REPORT DATE FILTERS
+   ========================================================= */
 
 function saleMatchesPeriod(sale, period) {
   const date = new Date(sale.date);
@@ -990,7 +1421,11 @@ function getSaleProductKey(sale) {
     : "legacy:" + String(sale.productName || "Unknown Product");
 }
 
-function deleteProductSales(productKey) {
+/* =========================================================
+   DELETE SALES FOR A PRODUCT IN SELECTED PERIOD
+   ========================================================= */
+
+async function deleteProductSales(productKey) {
   const period =
     document.getElementById("reportPeriod")?.value || "today";
 
@@ -1005,8 +1440,7 @@ function deleteProductSales(productKey) {
   }
 
   const quantityToRestore = selectedSales.reduce(
-    (sum, sale) => sum + Number(sale.quantity || 0),
-    0
+    (sum, sale) => sum + Number(sale.quantity || 0), 0
   );
 
   const product = products.find(p => String(p.id) === productKey);
@@ -1033,26 +1467,49 @@ function deleteProductSales(productKey) {
 
   if (!confirm(message)) return;
 
-  const idsToDelete = new Set(
-    selectedSales.map(sale => sale.id)
-  );
+  const saleIds = selectedSales.map(sale => sale.id);
 
-  sales = sales.filter(sale => !idsToDelete.has(sale.id));
+  try {
+    if (product) {
+      const newStock = Number(product.stock || 0) + quantityToRestore;
+      const newSold = Math.max(
+        0,
+        Number(product.sold || 0) - quantityToRestore
+      );
 
-  if (product) {
-    product.stock = Number(product.stock || 0) + quantityToRestore;
+      const { error: stockError } = await supabaseClient
+        .from("products")
+        .update({ stock: newStock, sold: newSold })
+        .eq("id", product.id);
 
-    product.sold = Math.max(
-      0,
-      Number(product.sold || 0) - quantityToRestore
-    );
+      if (stockError) throw stockError;
+
+      product.stock = newStock;
+      product.sold = newSold;
+    }
+
+    const { error: deleteError } = await supabaseClient
+      .from("sales")
+      .delete()
+      .in("id", saleIds);
+
+    if (deleteError) throw deleteError;
+
+    sales = sales.filter(sale => !saleIds.includes(sale.id));
+
+    renderAdmin();
+    renderProducts();
+
+    alert("The selected sales records have been deleted.");
+  } catch (error) {
+    alert("Could not delete sales: " + error.message);
+    await loadCloudData();
   }
-
-  saveAll();
-  renderAdmin();
-
-  alert("The selected product's sales records have been deleted.");
 }
+
+/* =========================================================
+   DISPLAY SALES REPORT
+   ========================================================= */
 
 function renderSalesReport() {
   const period =
@@ -1062,14 +1519,16 @@ function renderSalesReport() {
     saleMatchesPeriod(sale, period)
   );
 
-  const unitsSold = filtered.reduce(
-    (sum, sale) => sum + Number(sale.quantity || 0), 0
+  const totalRevenue = filtered.reduce(
+    (sum, sale) =>
+      sum + Number(sale.quantity || 0) * Number(sale.price || 0),
+    0
   );
 
   const periodSales = document.getElementById("periodSales");
 
   if (periodSales) {
-    periodSales.textContent = "Units Sold: " + unitsSold;
+    periodSales.textContent = money(totalRevenue);
   }
 
   const productTotals = new Map();
@@ -1081,11 +1540,16 @@ function renderSalesReport() {
     if (!productTotals.has(key)) {
       productTotals.set(key, {
         name,
-        quantity: 0
+        quantity: 0,
+        revenue: 0
       });
     }
 
-    productTotals.get(key).quantity += Number(sale.quantity || 0);
+    const item = productTotals.get(key);
+
+    item.quantity += Number(sale.quantity || 0);
+    item.revenue +=
+      Number(sale.quantity || 0) * Number(sale.price || 0);
   });
 
   const report = document.getElementById("salesReport");
@@ -1100,17 +1564,23 @@ function renderSalesReport() {
     <h3>Products Sold</h3>
 
     ${Array.from(productTotals.entries()).map(([key, item]) => `
-      <div class="sold-product-row"
-        style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; padding:12px; border-bottom:1px solid #ccc;">
-
-        <p style="margin:0;">
-          <strong>${escapeHTML(item.name)}</strong>:
-          ${item.quantity} units sold
-        </p>
+      <div
+        class="sold-product-row"
+        style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; padding:12px; border-bottom:1px solid #ccc;"
+      >
+        <div>
+          <strong>${escapeHTML(item.name)}</strong>
+          <p style="margin:5px 0;">
+            ${item.quantity} units sold
+          </p>
+          <p style="margin:5px 0;">
+            Sales: ${money(item.revenue)}
+          </p>
+        </div>
 
         <button
           type="button"
-          class="action-btn delete-sale-btn"
+          class="danger delete-sale-btn"
           data-sale-key="${escapeHTML(key)}"
         >
           Delete
@@ -1126,13 +1596,16 @@ function renderSalesReport() {
   });
 }
 
-/* BACKUP AND RESTORE */
+/* =========================================================
+   DOWNLOAD BACKUP
+   ========================================================= */
 
 function downloadBackup() {
   const backup = {
     products,
     sales,
-    date: new Date().toISOString()
+    date: new Date().toISOString(),
+    store: "CHEVAL Lighting Store"
   };
 
   const file = new Blob(
@@ -1150,54 +1623,165 @@ function downloadBackup() {
   URL.revokeObjectURL(url);
 }
 
-function restoreBackup() {
-  const file = document.getElementById("restoreFile").files[0];
+/* =========================================================
+   RESTORE BACKUP TO SUPABASE
+   ========================================================= */
+
+async function restoreBackup() {
+  const file = document.getElementById("restoreFile")?.files[0];
 
   if (!file) {
-    alert("Please choose a backup file.");
+    showMessage("backupMessage", "Please choose a backup file.", true);
     return;
   }
 
-  const reader = new FileReader();
+  try {
+    const backup = JSON.parse(await file.text());
 
-  reader.onload = function() {
-    try {
-      const backup = JSON.parse(reader.result);
-
-      if (
-        !Array.isArray(backup.products) ||
-        !Array.isArray(backup.sales)
-      ) {
-        throw new Error("Invalid backup file.");
-      }
-
-      if (!confirm(
-        "Restore this backup? Current products and sales will be replaced."
-      )) {
-        return;
-      }
-
-      products = backup.products;
-      sales = backup.sales;
-      cart = [];
-      wishlist = [];
-
-      if (!saveAll()) return;
-
-      renderAdmin();
-
-      alert("Backup restored successfully.");
-    } catch (error) {
-      alert("This backup file is invalid.");
+    if (
+      !Array.isArray(backup.products) ||
+      !Array.isArray(backup.sales)
+    ) {
+      throw new Error("This backup file is not valid.");
     }
-  };
 
-  reader.readAsText(file);
+    if (!confirm(
+      "Restore this backup? Current cloud products and sales will be replaced."
+    )) return;
+
+    showMessage("backupMessage", "Restoring backup...");
+
+    /* Delete sales first because they refer to products. */
+    const { error: salesDeleteError } = await supabaseClient
+      .from("sales")
+      .delete()
+      .not("id", "is", null);
+
+    if (salesDeleteError) throw salesDeleteError;
+
+    const { error: productsDeleteError } = await supabaseClient
+      .from("products")
+      .delete()
+      .not("id", "is", null);
+
+    if (productsDeleteError) throw productsDeleteError;
+
+    const idMap = new Map();
+    const productRows = [];
+
+    for (const product of backup.products) {
+      const newId = createId();
+      idMap.set(String(product.id), newId);
+
+      productRows.push({
+        id: newId,
+        name: product.name,
+        category: product.category,
+        price: product.price === "" ? null : product.price,
+        stock: Number(product.stock || 0),
+        sold: Number(product.sold || 0),
+        description: product.description || "",
+        photos: getProductPhotos(product)
+      });
+    }
+
+    if (productRows.length) {
+      const { error } = await supabaseClient
+        .from("products")
+        .insert(productRows);
+
+      if (error) throw error;
+    }
+
+    const saleRows = backup.sales.map(sale => ({
+      product_id: sale.productId
+        ? (idMap.get(String(sale.productId)) || null)
+        : null,
+      product_name: sale.productName || "Unknown Product",
+      quantity: Number(sale.quantity || 0),
+      price: Number(sale.price || 0),
+      sold_at: sale.date || new Date().toISOString()
+    }));
+
+    if (saleRows.length) {
+      const { error } = await supabaseClient
+        .from("sales")
+        .insert(saleRows);
+
+      if (error) throw error;
+    }
+
+    await loadCloudData();
+
+    showMessage("backupMessage", "Backup restored successfully!");
+  } catch (error) {
+    console.error(error);
+    showMessage("backupMessage", error.message, true);
+  }
 }
 
-/* STARTUP */
+/* =========================================================
+   CONNECT BUTTONS AND FORMS
+   ========================================================= */
 
-document.addEventListener("DOMContentLoaded", function() {
+function connectPageEvents() {
+  const ownerLoginForm = document.getElementById("ownerLoginForm");
+
+  if (ownerLoginForm) {
+    ownerLoginForm.addEventListener("submit", handleOwnerLogin);
+  }
+
+  const customerAuthForm = document.getElementById("customerAuthForm");
+
+  if (customerAuthForm) {
+    customerAuthForm.addEventListener("submit", handleCustomerAuth);
+  }
+
+  const productForm = document.getElementById("productForm");
+
+  if (productForm) {
+    productForm.addEventListener("submit", handleAddProduct);
+  }
+
+  const saleForm = document.getElementById("saleForm");
+
+  if (saleForm) {
+    saleForm.addEventListener("submit", handleRecordSale);
+  }
+
+  const changePasswordForm =
+    document.getElementById("changePasswordForm");
+
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener("submit", handlePasswordChange);
+  }
+
+  document.getElementById("reportPeriod")?.addEventListener(
+    "change",
+    renderSalesReport
+  );
+
+  document.getElementById("downloadBackupButton")?.addEventListener(
+    "click",
+    downloadBackup
+  );
+
+  document.getElementById("restoreBackupButton")?.addEventListener(
+    "click",
+    restoreBackup
+  );
+
+  document.getElementById("authSwitchButton")?.addEventListener(
+    "click",
+    switchCustomerAuth
+  );
+}
+
+/* =========================================================
+   STARTUP AND SESSION CHECK
+   ========================================================= */
+
+async function startWebsite() {
   document.getElementById("year")?.replaceChildren(
     document.createTextNode(new Date().getFullYear())
   );
@@ -1209,13 +1793,52 @@ document.addEventListener("DOMContentLoaded", function() {
 
     document.getElementById("languageBtn").textContent =
       language === "en" ? "EN | አማ" : "አማ | EN";
-
-    renderProducts();
   }
 
-  if (document.getElementById("adminDashboard")) {
-    if (sessionStorage.getItem("cheval_admin_logged_in") === "yes") {
-      openAdmin();
+  connectPageEvents();
+
+  if (!supabaseClient) return;
+
+  /* Restore the current login session, if one exists. */
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    console.error("Session error:", error);
+  }
+
+  const user = data?.session?.user || null;
+
+  if (user) {
+    currentUser = user;
+  }
+
+  updateCustomerAccountUI();
+
+  /* If this is the owner dashboard page, verify owner permission. */
+  if (document.getElementById("dashboard")) {
+    if (user) {
+      const ownerIsValid = await verifyOwner(user);
+
+      if (ownerIsValid) {
+        await showOwnerDashboard(user);
+      } else {
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        isOwner = false;
+      }
     }
+
+    return;
   }
-});
+
+  /* On the public store page, load products for everyone. */
+  await loadCloudData();
+
+  /* Keep the account display updated when a customer signs in or out. */
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    currentUser = session?.user || null;
+    updateCustomerAccountUI();
+  });
+}
+
+document.addEventListener("DOMContentLoaded", startWebsite);
