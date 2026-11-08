@@ -24,7 +24,6 @@
       <input type="password" id="adminPin" placeholder="Enter PIN">
       <button class="primary-btn" onclick="adminLogin()">Login</button>
       <p id="loginError" class="error"></p>
-      <small>Demo PIN: 1234. This is not secure authentication for real business data.</small>
     </section>
 
     <div id="adminDashboard" hidden>
@@ -42,14 +41,17 @@
           <span>Total Products</span>
           <strong id="totalProducts">0</strong>
         </div>
+
         <div class="stat-card">
           <span>Items in Stock</span>
           <strong id="totalStock">0</strong>
         </div>
+
         <div class="stat-card">
           <span>Units Sold</span>
           <strong id="totalSold">0</strong>
         </div>
+
         <div class="stat-card">
           <span>Low-Stock Products</span>
           <strong id="lowStockProducts">0</strong>
@@ -58,6 +60,7 @@
 
       <section class="admin-card">
         <h2>Add a Product</h2>
+
         <form id="productForm">
 
           <label>Product Name *</label>
@@ -67,7 +70,7 @@
           <select id="productCategory" required>
             <option value="">Choose category</option>
             <option>Chandeliers</option>
-            <option>Fauntain light 12W</option>
+            <option>Fauntain light</option>
             <option>Ceiling Lights</option>
             <option>LED Bulbs</option>
             <option>Wall Lights</option>
@@ -94,8 +97,18 @@
           <textarea id="productDescription"
             placeholder="Describe your product..."></textarea>
 
-          <label>Product Photo *</label>
-          <input type="file" id="productPhoto" accept="image/*" required>
+          <label>Product Photos — Optional (Select multiple photos)</label>
+          <input
+            type="file"
+            id="productPhoto"
+            accept="image/*"
+            multiple
+          >
+
+          <p class="photo-help">
+            You can add photos now or leave this empty and upload photos later.
+            Each photo must be smaller than 1.5 MB.
+          </p>
 
           <button type="submit" class="primary-btn">Save Product</button>
         </form>
@@ -125,7 +138,7 @@
 
       <section class="admin-card">
         <h2>Inventory Management</h2>
-        <p>View remaining stock, edit products, and add newly received stock.</p>
+        <p>View remaining stock, add product photos, edit products, and add newly received stock.</p>
 
         <div class="table-wrap">
           <table>
@@ -166,11 +179,56 @@
       <section class="admin-card">
         <h2>Backup and Restore</h2>
         <p>Download a copy of your products and stock records.</p>
-        <button class="primary-btn" onclick="downloadBackup()">Download Backup</button>
+
+        <button class="primary-btn" onclick="downloadBackup()">
+          Download Backup
+        </button>
 
         <label>Restore from backup</label>
         <input type="file" id="restoreFile" accept=".json">
-        <button class="secondary-btn" onclick="restoreBackup()">Restore Backup</button>
+
+        <button class="secondary-btn" onclick="restoreBackup()">
+          Restore Backup
+        </button>
+      </section>
+
+      <section class="admin-card">
+        <h2>Change Owner Password</h2>
+        <p>Change the PIN you use to access Owner Management.</p>
+
+        <form id="changePasswordForm">
+
+          <label>Current Password</label>
+          <input
+            type="password"
+            id="currentPassword"
+            required
+            placeholder="Enter current password"
+          >
+
+          <label>New Password</label>
+          <input
+            type="password"
+            id="newPassword"
+            minlength="4"
+            required
+            placeholder="Enter new password"
+          >
+
+          <label>Confirm New Password</label>
+          <input
+            type="password"
+            id="confirmPassword"
+            minlength="4"
+            required
+            placeholder="Confirm new password"
+          >
+
+          <button type="submit" class="primary-btn">
+            Save New Password
+          </button>
+
+        </form>
       </section>
 
     </div>
