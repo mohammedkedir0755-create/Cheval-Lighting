@@ -1,239 +1,643 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CHEVAL | Owner Management</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body class="admin-body">
+  <title>CHEVAL Lighting | Owner Dashboard</title>
 
-  <header class="admin-header">
-    <a href="index.html" class="admin-brand">
-      <img src="logo.jpg" alt="CHEVAL Logo">
-    </a>
-    <h2>Owner Management</h2>
-    <a href="index.html" class="secondary-btn">View Store</a>
+  <style>
+    :root {
+      --red: #ed1734;
+      --black: #080808;
+      --panel: #171717;
+      --white: #ffffff;
+      --muted: #aaaaaa;
+      --border: #333333;
+      --green: #20c878;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--black);
+      color: var(--white);
+      font-family: Arial, sans-serif;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 15px 5%;
+      background: #111;
+      border-bottom: 3px solid var(--red);
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand img {
+      width: 65px;
+      height: 65px;
+      object-fit: contain;
+    }
+
+    header h1 {
+      font-size: 21px;
+      margin: 0;
+    }
+
+    header p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    a {
+      color: white;
+      text-decoration: none;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .container {
+      width: 92%;
+      max-width: 1250px;
+      margin: 30px auto;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 22px;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 21px;
+    }
+
+    h3 {
+      margin-top: 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .login-panel {
+      max-width: 450px;
+      margin: 65px auto;
+      text-align: center;
+    }
+
+    .login-panel img {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      margin-bottom: 12px;
+    }
+
+    .field {
+      margin-bottom: 15px;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #444;
+      border-radius: 7px;
+      background: #090909;
+      color: white;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--red);
+    }
+
+    input[type="file"] {
+      padding: 9px;
+    }
+
+    button, .btn {
+      display: inline-block;
+      border: none;
+      border-radius: 7px;
+      padding: 12px 17px;
+      background: var(--red);
+      color: white;
+      font-weight: bold;
+    }
+
+    button:hover, .btn:hover {
+      opacity: .88;
+    }
+
+    .secondary {
+      background: #333;
+    }
+
+    .danger {
+      background: #b51d2d;
+    }
+
+    .success {
+      background: #168a50;
+    }
+
+    .full {
+      width: 100%;
+    }
+
+    .message {
+      min-height: 20px;
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--red);
+      overflow-wrap: anywhere;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 22px;
+    }
+
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .stat p {
+      color: var(--muted);
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+
+    .stat strong {
+      font-size: 25px;
+      overflow-wrap: anywhere;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+
+    .form-grid .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 650px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    th {
+      color: var(--red);
+      background: #101010;
+    }
+
+    td button {
+      margin: 3px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+    }
+
+    .report-summary {
+      font-size: 22px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .notice {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 850px) {
+      .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 550px) {
+      .container {
+        width: 94%;
+        margin-top: 18px;
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+      }
+
+      .stat {
+        padding: 13px;
+      }
+
+      .stat strong {
+        font-size: 19px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-grid .full-width {
+        grid-column: auto;
+      }
+
+      header {
+        padding: 12px 4%;
+      }
+
+      header h1 {
+        font-size: 17px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="brand">
+      <img src="logo.jpg" alt="CHEVAL Lighting Logo">
+      <div>
+        <h1>CHEVAL LIGHTING</h1>
+        <p>Owner Management Dashboard</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a class="btn secondary" href="index.html">View Store</a>
+      <button id="adminLogoutButton" class="danger hidden"
+        onclick="adminLogout()">Log Out</button>
+    </div>
   </header>
 
-  <main class="admin-container">
+  <main class="container">
 
-    <section id="loginPanel" class="admin-card login-card">
+    <!-- OWNER LOGIN -->
+    <section id="loginPanel" class="panel login-panel">
+      <img src="logo.jpg" alt="CHEVAL Lighting Logo">
+
       <h2>Owner Login</h2>
-      <p>Enter your management PIN.</p>
-      <input type="password" id="adminPin" placeholder="Enter PIN">
-      <button class="primary-btn" onclick="adminLogin()">Login</button>
-      <p id="loginError" class="error"></p>
+      <p class="muted">Sign in with your owner email and password.</p>
+
+      <form id="ownerLoginForm">
+        <div class="field">
+          <label for="adminEmail">Owner Email</label>
+          <input
+            type="email"
+            id="adminEmail"
+            placeholder="Enter owner email"
+            autocomplete="username"
+            required>
+        </div>
+
+        <div class="field">
+          <label for="adminPassword">Password</label>
+          <input
+            type="password"
+            id="adminPassword"
+            placeholder="Enter password"
+            autocomplete="current-password"
+            required>
+        </div>
+
+        <button type="submit" class="full" id="adminLoginButton">
+          Login to Dashboard
+        </button>
+      </form>
+
+      <p id="loginError" class="message"></p>
     </section>
 
-    <div id="adminDashboard" hidden>
+    <!-- OWNER DASHBOARD -->
+    <section id="dashboard" class="hidden">
 
-      <div class="dashboard-title">
-        <div>
-          <h1>CHEVAL Management</h1>
-          <p>Manage products, inventory and stock.</p>
+      <div class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Management Dashboard</h2>
+            <p class="muted">Manage your products, inventory and sales.</p>
+          </div>
+          <span id="ownerEmailDisplay" class="muted"></span>
         </div>
-        <button class="secondary-btn" onclick="adminLogout()">Logout</button>
       </div>
 
-      <section class="stats-grid">
-        <div class="stat-card">
-          <span>Total Products</span>
+      <!-- STATISTICS -->
+      <div class="dashboard-grid">
+        <div class="stat">
+          <p>Total Products</p>
           <strong id="totalProducts">0</strong>
         </div>
 
-        <div class="stat-card">
-          <span>Items in Stock</span>
+        <div class="stat">
+          <p>Total Stock</p>
           <strong id="totalStock">0</strong>
         </div>
 
-        <div class="stat-card">
-          <span>Units Sold</span>
+        <div class="stat">
+          <p>Total Sold</p>
           <strong id="totalSold">0</strong>
         </div>
 
-        <div class="stat-card">
-          <span>Low-Stock Products</span>
+        <div class="stat">
+          <p>Low Stock Products</p>
           <strong id="lowStockProducts">0</strong>
         </div>
-      </section>
+      </div>
 
-      <section class="admin-card">
-        <h2>Add a Product</h2>
+      <!-- ADD PRODUCT -->
+      <section class="panel">
+        <h2>Add New Product</h2>
 
         <form id="productForm">
+          <div class="form-grid">
 
-          <label>Product Name *</label>
-          <input id="productName" required placeholder="Product name">
+            <div class="field">
+              <label for="productName">Product Name *</label>
+              <input id="productName" type="text"
+                placeholder="Product name" required>
+            </div>
 
-          <label>Product Category *</label>
-          <select id="productCategory" required>
-            <option value="">Choose category</option>
-            <option>Chandeliers</option>
-            <option>Fauntain light</option>
-            <option>Ceiling Lights</option>
-            <option>LED Bulbs</option>
-            <option>Wall Lights</option>
-            <option>Pendant Lights</option>
-            <option>Outdoor Lights</option>
-            <option>Decorative Lights</option>
-            <option>Spotlights</option>
-            <option>Strip Lights</option>
-            <option>Table and Floor Lamps</option>
-            <option>Smart Lighting</option>
-            <option>Electrical Accessories</option>
-            <option>Other</option>
-          </select>
+            <div class="field">
+              <label for="productCategory">Category *</label>
+              <select id="productCategory" required>
+                <option value="">Choose category</option>
+                <option value="Chandeliers">Chandeliers</option>
+                <option value="Pendant Lights">Pendant Lights</option>
+                <option value="Ceiling Lights">Ceiling Lights</option>
+                <option value="Wall Lights">Wall Lights</option>
+                <option value="Outdoor Lights">Outdoor Lights</option>
+                <option value="LED Lights">LED Lights</option>
+                <option value="Spotlights">Spotlights</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
 
-          <label>Selling Price (ETB) — Optional</label>
-          <input type="number" id="productPrice" min="0" step="0.01"
-            placeholder="Leave empty if you don't want to show a price">
+            <div class="field">
+              <label for="productPrice">Price (ETB) *</label>
+              <input id="productPrice" type="number"
+                min="0" step="0.01" placeholder="Product price" required>
+            </div>
 
-          <label>Initial Stock Quantity *</label>
-          <input type="number" id="productStock" min="0" step="1"
-            required placeholder="Enter quantity">
+            <div class="field">
+              <label for="productStock">Starting Stock *</label>
+              <input id="productStock" type="number"
+                min="0" step="1" placeholder="Quantity" required>
+            </div>
 
-          <label>Product Description — Optional</label>
-          <textarea id="productDescription"
-            placeholder="Describe your product..."></textarea>
+            <div class="field full-width">
+              <label for="productDescription">Description</label>
+              <textarea id="productDescription" rows="3"
+                placeholder="Product details"></textarea>
+            </div>
 
-          <label>Product Photos — Optional (Select multiple photos)</label>
-          <input
-            type="file"
-            id="productPhoto"
-            accept="image/*"
-            multiple
-          >
+            <div class="field full-width">
+              <label for="productPhoto">Product Photos</label>
+              <input id="productPhoto" type="file"
+                accept="image/jpeg,image/png,image/webp" multiple>
+              <p class="notice">
+                Maximum image size: 1.5 MB per photo.
+                You can add more photos later.
+              </p>
+            </div>
 
-          <p class="photo-help">
-            You can add photos now or leave this empty and upload photos later.
-            Each photo must be smaller than 1.5 MB.
-          </p>
+            <div class="full-width">
+              <button type="submit" id="addProductButton">
+                Add Product
+              </button>
+              <p id="productMessage" class="message"></p>
+            </div>
 
-          <button type="submit" class="primary-btn">Save Product</button>
+          </div>
         </form>
       </section>
 
-      <section class="admin-card">
+      <!-- RECORD SALE -->
+      <section class="panel">
         <h2>Record a Sale</h2>
-        <p>Only the product and quantity are required. You can record a sale without entering a price.</p>
 
         <form id="saleForm">
-          <label>Select Product *</label>
-          <select id="saleProduct" required></select>
+          <div class="form-grid">
 
-          <label>Quantity Sold *</label>
-          <input type="number" id="saleQuantity" min="1" step="1"
-            required placeholder="How many items were sold?">
+            <div class="field">
+              <label for="saleProduct">Select Product *</label>
+              <select id="saleProduct" required>
+                <option value="">Choose product</option>
+              </select>
+            </div>
 
-          <label>Selling Price Per Item (ETB) — Optional</label>
-          <input type="number" id="salePrice" min="0" step="0.01"
-            placeholder="Optional">
+            <div class="field">
+              <label for="saleQuantity">Quantity Sold *</label>
+              <input id="saleQuantity" type="number"
+                min="1" step="1" value="1" required>
+            </div>
 
-          <button class="primary-btn" type="submit">Record Sale</button>
+            <div class="field">
+              <label for="salePrice">Sale Price per Item (ETB)</label>
+              <input id="salePrice" type="number"
+                min="0" step="0.01" placeholder="Use product price if empty">
+            </div>
+
+            <div class="full-width">
+              <button type="submit" id="recordSaleButton">
+                Record Sale
+              </button>
+              <p id="saleMessage" class="message"></p>
+            </div>
+
+          </div>
         </form>
-
-        <p id="saleMessage"></p>
       </section>
 
-      <section class="admin-card">
-        <h2>Inventory Management</h2>
-        <p>View remaining stock, add product photos, edit products, and add newly received stock.</p>
+      <!-- INVENTORY -->
+      <section class="panel">
+        <div class="section-title">
+          <h2>Inventory Management</h2>
+        </div>
 
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Photo</th>
                 <th>Product</th>
+                <th>Category</th>
                 <th>Price</th>
-                <th>Remaining Stock</th>
+                <th>Stock</th>
                 <th>Sold</th>
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="inventoryTable"></tbody>
+            <tbody id="inventoryTable">
+              <tr><td colspan="6">Loading inventory...</td></tr>
+            </tbody>
           </table>
         </div>
       </section>
 
-      <section class="admin-card">
-        <h2>Stock and Sales Reports</h2>
+      <!-- SALES REPORTS -->
+      <section class="panel">
+        <h2>Sales Reports</h2>
 
-        <div class="report-filters">
-          <label>Report period
-            <select id="reportPeriod" onchange="renderAdmin()">
-              <option value="today">Today</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
-              <option value="year">This year</option>
-              <option value="all">All time</option>
-            </select>
-          </label>
+        <div class="field">
+          <label for="reportPeriod">Report Period</label>
+          <select id="reportPeriod">
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="all">All Time</option>
+          </select>
         </div>
 
-        <h3 id="periodSales">Units Sold: 0</h3>
-        <div id="salesReport"></div>
+        <div class="report-summary">
+          Total Sales: <span id="periodSales">ETB 0</span>
+        </div>
+
+        <div id="salesReport" class="table-wrap">
+          Loading sales report...
+        </div>
       </section>
 
-      <section class="admin-card">
+      <!-- BACKUP -->
+      <section class="panel">
         <h2>Backup and Restore</h2>
-        <p>Download a copy of your products and stock records.</p>
 
-        <button class="primary-btn" onclick="downloadBackup()">
+        <p class="notice">
+          Download a backup regularly to keep a copy of your store records.
+          Keep your backup file somewhere safe.
+        </p>
+
+        <button type="button" id="downloadBackupButton">
           Download Backup
         </button>
 
-        <label>Restore from backup</label>
-        <input type="file" id="restoreFile" accept=".json">
+        <div class="field" style="margin-top:20px">
+          <label for="restoreFile">Restore from Backup</label>
+          <input type="file" id="restoreFile" accept=".json,application/json">
+        </div>
 
-        <button class="secondary-btn" onclick="restoreBackup()">
+        <button type="button" id="restoreBackupButton" class="secondary">
           Restore Backup
         </button>
+
+        <p id="backupMessage" class="message"></p>
       </section>
 
-      <section class="admin-card">
+      <!-- CHANGE PASSWORD -->
+      <section class="panel">
         <h2>Change Owner Password</h2>
-        <p>Change the PIN you use to access Owner Management.</p>
+
+        <p class="notice">
+          Change the password for the owner account currently signed in.
+        </p>
 
         <form id="changePasswordForm">
+          <div class="form-grid">
 
-          <label>Current Password</label>
-          <input
-            type="password"
-            id="currentPassword"
-            required
-            placeholder="Enter current password"
-          >
+            <div class="field">
+              <label for="newPassword">New Password</label>
+              <input type="password" id="newPassword"
+                minlength="8" placeholder="At least 8 characters" required>
+            </div>
 
-          <label>New Password</label>
-          <input
-            type="password"
-            id="newPassword"
-            minlength="4"
-            required
-            placeholder="Enter new password"
-          >
+            <div class="field">
+              <label for="confirmPassword">Confirm New Password</label>
+              <input type="password" id="confirmPassword"
+                minlength="8" placeholder="Enter password again" required>
+            </div>
 
-          <label>Confirm New Password</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            minlength="4"
-            required
-            placeholder="Confirm new password"
-          >
+            <div class="full-width">
+              <button type="submit">Update Password</button>
+              <p id="passwordMessage" class="message"></p>
+            </div>
 
-          <button type="submit" class="primary-btn">
-            Save New Password
-          </button>
-
+          </div>
         </form>
       </section>
 
-    </div>
+    </section>
   </main>
 
+  <!-- Supabase must load before app.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+
 </body>
 </html>
