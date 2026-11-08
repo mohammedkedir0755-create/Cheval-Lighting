@@ -6,6 +6,7 @@ const PRODUCTS_KEY = "cheval_products_v1";
 const SALES_KEY = "cheval_sales_v1";
 const CART_KEY = "cheval_cart_v1";
 const WISH_KEY = "cheval_wishlist_v1";
+const ADMIN_PIN_KEY = "cheval_admin_pin_v1";
 
 let products = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || "[]");
 let sales = JSON.parse(localStorage.getItem(SALES_KEY) || "[]");
@@ -14,15 +15,27 @@ let wishlist = JSON.parse(localStorage.getItem(WISH_KEY) || "[]");
 
 let currentCategory = "All";
 let language = localStorage.getItem("cheval_language") || "en";
+let adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
 
-const money = value =>
-  Number(value || 0).toLocaleString("en-US") + " ETB";
+/* SAVE DATA */
 
 function saveAll() {
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-  localStorage.setItem(SALES_KEY, JSON.stringify(sales));
-  localStorage.setItem(CART_KEY, JSON.stringify(cart));
-  localStorage.setItem(WISH_KEY, JSON.stringify(wishlist));
+  try {
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    localStorage.setItem(WISH_KEY, JSON.stringify(wishlist));
+    return true;
+  } catch (error) {
+    alert(
+      "Your browser storage is full. Try using smaller photos or fewer photos."
+    );
+    return false;
+  }
+}
+
+function money(value) {
+  return Number(value || 0).toLocaleString("en-US") + " ETB";
 }
 
 function escapeHTML(value) {
@@ -39,6 +52,75 @@ function createId() {
   return crypto.randomUUID
     ? crypto.randomUUID()
     : Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+/* PRODUCT PHOTO HELPERS */
+
+/* Supports both new multiple-photo products and older single-photo products. */
+function getProductPhotos(product) {
+  if (Array.isArray(product.photos)) {
+    return product.photos.filter(
+      photo => typeof photo === "string" && photo.length > 0
+    );
+  }
+
+  if (product.photo) {
+    return [product.photo];
+  }
+
+  return [];
+}
+
+function getProductPhotoHTML(product) {
+  const photos = getProductPhotos(product);
+
+  if (photos.length) {
+    return `
+      <button
+        type="button"
+        class="product-photo-button"
+        onclick="openProductGallery('${product.id}')"
+        aria-label="View photos of ${escapeHTML(product.name)}"
+      >
+        <img src="${photos[0]}" alt="${escapeHTML(product.name)}">
+        <span>View Photos (${photos.length})</span>
+      </button>
+    `;
+  }
+
+  return `
+    <button
+      type="button"
+      class="product-photo-button no-product-photo"
+      onclick="openProductGallery('${product.id}')"
+    >
+      <span>No photo available</span>
+      <small>View product</small>
+    </button>
+  `;
+}
+
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Please select image files only."));
+      return;
+    }
+
+    if (file.size > 1500000) {
+      reject(new Error(
+        "Each photo must be smaller than 1.5 MB. Please reduce the photo size."
+      ));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read a photo."));
+
+    reader.readAsDataURL(file);
+  });
 }
 
 /* LANGUAGE */
@@ -104,11 +186,11 @@ function renderProducts() {
 
       return `
         <article class="product-card">
-          <img src="${product.photo}" alt="${escapeHTML(product.name)}">
+
+          ${getProductPhotoHTML(product)}
 
           <div class="product-info">
             <h3>${escapeHTML(product.name)}</h3>
-
             <p>${escapeHTML(product.category)}</p>
 
             ${
@@ -120,7 +202,7 @@ function renderProducts() {
             ${
               hasPrice
                 ? `<p class="product-price">${money(product.price)}</p>`
-                : ""
+                : `<p class="contact-price">Contact us for price</p>`
             }
 
             <div class="product-actions">
@@ -132,6 +214,13 @@ function renderProducts() {
 
               <button onclick="toggleWishlist('${product.id}')">
                 ${wishlist.includes(product.id) ? "♥ Saved" : "♡ Wishlist"}
+              </button>
+
+              <button
+                type="button"
+                onclick="openProductGallery('${product.id}')"
+              >
+                View Photos
               </button>
             </div>
           </div>
@@ -165,6 +254,132 @@ function selectCategory(category) {
   renderProducts();
 }
 
+/* PRODUCT PHOTO GALLERY */
+
+let currentGalleryPhotos = [];
+let currentGalleryIndex = 0;
+
+function openProductGallery(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  currentGalleryPhotos = getProductPhotos(product);
+  currentGalleryIndex = 0;
+
+  closeProductGallery();
+
+  const gallery = document.createElement("div");
+  gallery.id = "productGallery";
+  gallery.className = "gallery-overlay";
+
+  gallery.innerHTML = `
+    <div class="gallery-window">
+
+      <button
+        type="button"
+        class="gallery-close"
+        onclick="closeProductGallery()"
+        aria-label="Close gallery"
+      >×</button>
+
+      <h2>${escapeHTML(product.name)}</h2>
+
+      <div id="galleryMainImage"></div>
+
+      <div class="gallery-controls">
+        <button type="button" onclick="changeGalleryPhoto(-1)">
+          ❮ Previous
+        </button>
+
+        <span id="galleryCounter"></span>
+
+        <button type="button" onclick="changeGalleryPhoto(1)">
+          Next ❯
+        </button>
+      </div>
+
+      <div id="galleryThumbnails" class="gallery-thumbnails"></div>
+    </div>
+  `;
+
+  gallery.addEventListener("click", function(event) {
+    if (event.target === gallery) {
+      closeProductGallery();
+    }
+  });
+
+  document.body.appendChild(gallery);
+  renderGalleryPhoto();
+}
+
+function renderGalleryPhoto() {
+  const main = document.getElementById("galleryMainImage");
+  const counter = document.getElementById("galleryCounter");
+  const thumbnails = document.getElementById("galleryThumbnails");
+
+  if (!main || !counter || !thumbnails) return;
+
+  if (!currentGalleryPhotos.length) {
+    main.innerHTML = `
+      <div class="no-gallery-photo">
+        No photos available yet.
+      </div>
+    `;
+
+    counter.textContent = "0 photos";
+    thumbnails.innerHTML = "";
+    return;
+  }
+
+  main.innerHTML = `
+    <img
+      src="${currentGalleryPhotos[currentGalleryIndex]}"
+      alt="Product photo"
+    >
+  `;
+
+  counter.textContent =
+    (currentGalleryIndex + 1) + " / " + currentGalleryPhotos.length;
+
+  thumbnails.innerHTML = currentGalleryPhotos.map((photo, index) => `
+    <button
+      type="button"
+      class="gallery-thumb ${index === currentGalleryIndex ? "active" : ""}"
+      onclick="selectGalleryPhoto(${index})"
+      aria-label="Show photo ${index + 1}"
+    >
+      <img src="${photo}" alt="Product photo ${index + 1}">
+    </button>
+  `).join("");
+}
+
+function changeGalleryPhoto(direction) {
+  if (!currentGalleryPhotos.length) return;
+
+  currentGalleryIndex =
+    (currentGalleryIndex + direction + currentGalleryPhotos.length) %
+    currentGalleryPhotos.length;
+
+  renderGalleryPhoto();
+}
+
+function selectGalleryPhoto(index) {
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= currentGalleryPhotos.length
+  ) {
+    return;
+  }
+
+  currentGalleryIndex = index;
+  renderGalleryPhoto();
+}
+
+function closeProductGallery() {
+  document.getElementById("productGallery")?.remove();
+}
+
 /* WISHLIST */
 
 function toggleWishlist(id) {
@@ -187,7 +402,8 @@ function renderWishlist() {
   area.innerHTML = saved.length
     ? saved.map(product => `
         <article class="product-card">
-          <img src="${product.photo}" alt="${escapeHTML(product.name)}">
+
+          ${getProductPhotoHTML(product)}
 
           <div class="product-info">
             <h3>${escapeHTML(product.name)}</h3>
@@ -197,11 +413,13 @@ function renderWishlist() {
               product.price !== undefined &&
               product.price !== ""
                 ? `<p class="product-price">${money(product.price)}</p>`
-                : ""
+                : `<p class="contact-price">Contact us for price</p>`
             }
 
-            <button class="secondary-btn"
-              onclick="toggleWishlist('${product.id}')">
+            <button
+              class="secondary-btn"
+              onclick="toggleWishlist('${product.id}')"
+            >
               Remove ♥
             </button>
           </div>
@@ -315,15 +533,19 @@ function customerLogin() {
 /* OWNER LOGIN */
 
 function adminLogin() {
-  const pin = document.getElementById("adminPin").value;
+  const pinInput = document.getElementById("adminPin");
+  const error = document.getElementById("loginError");
 
-  // Demo PIN only. This is not secure server-side authentication.
-  if (pin === "1234") {
+  const pin = pinInput.value;
+
+  adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
+
+  if (pin === adminPin) {
     sessionStorage.setItem("cheval_admin_logged_in", "yes");
     openAdmin();
+    error.textContent = "";
   } else {
-    document.getElementById("loginError").textContent =
-      "Incorrect PIN. Please try again.";
+    error.textContent = "Incorrect PIN. Please try again.";
   }
 }
 
@@ -338,31 +560,72 @@ function adminLogout() {
   location.reload();
 }
 
-/* ADD PRODUCT */
+/* CHANGE OWNER PASSWORD */
+
+const changePasswordForm = document.getElementById("changePasswordForm");
+
+if (changePasswordForm) {
+  changePasswordForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+
+    const currentPassword =
+      document.getElementById("currentPassword").value;
+
+    const newPassword =
+      document.getElementById("newPassword").value;
+
+    const confirmPassword =
+      document.getElementById("confirmPassword").value;
+
+    adminPin = localStorage.getItem(ADMIN_PIN_KEY) || "1315";
+
+    if (currentPassword !== adminPin) {
+      alert("Your current password is incorrect.");
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      alert("Your new password must contain at least 4 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert("The new passwords do not match.");
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      alert("Your new password must be different from the current password.");
+      return;
+    }
+
+    localStorage.setItem(ADMIN_PIN_KEY, newPassword);
+    adminPin = newPassword;
+
+    changePasswordForm.reset();
+
+    alert("Your owner password has been changed successfully!");
+  });
+}
+
+/* ADD PRODUCT WITH MULTIPLE PHOTOS */
 
 const productForm = document.getElementById("productForm");
 
 if (productForm) {
-  productForm.addEventListener("submit", function(event) {
+  productForm.addEventListener("submit", async function(event) {
     event.preventDefault();
 
-    const file = document.getElementById("productPhoto").files[0];
-
-    if (!file || !file.type.startsWith("image/")) {
-      alert("Please select a valid product photo.");
-      return;
-    }
-
-    if (file.size > 1500000) {
-      alert("Please use an image smaller than 1.5 MB.");
-      return;
-    }
+    const files = Array.from(
+      document.getElementById("productPhoto").files
+    );
 
     const name = document.getElementById("productName").value.trim();
     const category = document.getElementById("productCategory").value;
     const priceInput = document.getElementById("productPrice").value.trim();
     const stock = Number(document.getElementById("productStock").value);
-    const description = document.getElementById("productDescription").value.trim();
+    const description =
+      document.getElementById("productDescription").value.trim();
 
     const price = priceInput === "" ? null : Number(priceInput);
 
@@ -377,9 +640,9 @@ if (productForm) {
       return;
     }
 
-    const reader = new FileReader();
+    try {
+      const photos = await Promise.all(files.map(readImageFile));
 
-    reader.onload = function() {
       const product = {
         id: createId(),
         name,
@@ -388,21 +651,81 @@ if (productForm) {
         stock,
         sold: 0,
         description,
-        photo: reader.result
+        photos,
+        photo: photos[0] || ""
       };
 
       products.push(product);
 
-      saveAll();
+      if (!saveAll()) {
+        products.pop();
+        return;
+      }
+
       productForm.reset();
 
       alert("Product added successfully!");
-      renderAdmin();
-    };
 
-    reader.onerror = () => alert("Could not read this photo.");
-    reader.readAsDataURL(file);
+      renderAdmin();
+      renderProducts();
+
+    } catch (error) {
+      alert(error.message || "Could not save the product photos.");
+    }
   });
+}
+
+/* ADD MORE PHOTOS TO AN EXISTING PRODUCT */
+
+function addProductPhotos(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+
+  const fileInput = document.createElement("input");
+
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+  fileInput.multiple = true;
+  fileInput.style.display = "none";
+
+  document.body.appendChild(fileInput);
+
+  fileInput.addEventListener("change", async function() {
+    const files = Array.from(fileInput.files);
+
+    if (!files.length) {
+      fileInput.remove();
+      return;
+    }
+
+    try {
+      const newPhotos = await Promise.all(files.map(readImageFile));
+
+      const oldPhotos = getProductPhotos(product);
+
+      product.photos = [...oldPhotos, ...newPhotos];
+      product.photo = product.photos[0] || "";
+
+      if (!saveAll()) {
+        product.photos = oldPhotos;
+        product.photo = oldPhotos[0] || "";
+        fileInput.remove();
+        return;
+      }
+
+      renderAdmin();
+      renderProducts();
+
+      alert("New product photos added successfully!");
+
+    } catch (error) {
+      alert(error.message || "Could not add the photos.");
+    }
+
+    fileInput.remove();
+  });
+
+  fileInput.click();
 }
 
 /* RECORD SALE */
@@ -434,7 +757,6 @@ if (saleForm) {
       return;
     }
 
-    // Reduce stock automatically.
     product.stock -= quantity;
     product.sold = Number(product.sold || 0) + quantity;
 
@@ -514,22 +836,44 @@ function renderAdmin() {
       p.price !== undefined &&
       p.price !== "";
 
+    const photoCount = getProductPhotos(p).length;
+
     return `
       <tr>
-        <td><img src="${p.photo}" alt=""></td>
+        <td>${getProductPhotoHTML(p)}</td>
+
         <td>${escapeHTML(p.name)}</td>
+
         <td>${hasPrice ? money(p.price) : "Not set"}</td>
+
         <td>${Number(p.stock || 0)}</td>
+
         <td>${Number(p.sold || 0)}</td>
+
         <td>
-          <button class="action-btn"
-            onclick="addStock('${p.id}')">Add Stock</button>
+          <button
+            class="action-btn"
+            onclick="addProductPhotos('${p.id}')"
+          >
+            Add Photos
+          </button>
 
-          <button class="action-btn"
-            onclick="editProduct('${p.id}')">Edit</button>
+          <span class="photo-count">${photoCount} photo(s)</span>
 
-          <button class="action-btn"
-            onclick="deleteProduct('${p.id}')">Delete</button>
+          <button
+            class="action-btn"
+            onclick="addStock('${p.id}')"
+          >Add Stock</button>
+
+          <button
+            class="action-btn"
+            onclick="editProduct('${p.id}')"
+          >Edit</button>
+
+          <button
+            class="action-btn"
+            onclick="deleteProduct('${p.id}')"
+          >Delete</button>
         </td>
       </tr>
     `;
@@ -555,7 +899,7 @@ function renderAdmin() {
   renderSalesReport();
 }
 
-/* EDIT AND DELETE */
+/* EDIT AND DELETE PRODUCTS */
 
 function editProduct(id) {
   const product = products.find(p => p.id === id);
@@ -592,6 +936,7 @@ function editProduct(id) {
 
   saveAll();
   renderAdmin();
+  renderProducts();
 }
 
 function deleteProduct(id) {
@@ -603,72 +948,182 @@ function deleteProduct(id) {
 
   saveAll();
   renderAdmin();
+  renderProducts();
 }
 
 /* STOCK AND SALES REPORTS */
+
+function saleMatchesPeriod(sale, period) {
+  const date = new Date(sale.date);
+
+  if (Number.isNaN(date.getTime())) return false;
+
+  const now = new Date();
+
+  if (period === "today") {
+    return date.toDateString() === now.toDateString();
+  }
+
+  if (period === "week") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+
+    return date >= start && date <= now;
+  }
+
+  if (period === "month") {
+    return date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+  }
+
+  if (period === "year") {
+    return date.getFullYear() === now.getFullYear();
+  }
+
+  return true;
+}
+
+function getSaleProductKey(sale) {
+  return sale.productId
+    ? String(sale.productId)
+    : "legacy:" + String(sale.productName || "Unknown Product");
+}
+
+function deleteProductSales(productKey) {
+  const period =
+    document.getElementById("reportPeriod")?.value || "today";
+
+  const selectedSales = sales.filter(sale =>
+    getSaleProductKey(sale) === productKey &&
+    saleMatchesPeriod(sale, period)
+  );
+
+  if (!selectedSales.length) {
+    alert("No sales records found for this product in this period.");
+    return;
+  }
+
+  const quantityToRestore = selectedSales.reduce(
+    (sum, sale) => sum + Number(sale.quantity || 0),
+    0
+  );
+
+  const product = products.find(p => String(p.id) === productKey);
+
+  const productName = product?.name ||
+    selectedSales[0].productName ||
+    "this product";
+
+  const periodName = {
+    today: "today",
+    week: "this week",
+    month: "this month",
+    year: "this year",
+    all: "all time"
+  }[period] || period;
+
+  const message =
+    "Delete " + quantityToRestore + " sold unit(s) of " +
+    productName + " from " + periodName + "?\n\n" +
+    "This will remove the matching sales records." +
+    (product
+      ? "\nThe " + quantityToRestore + " unit(s) will be returned to stock."
+      : "\nThis product is no longer in inventory, so no stock will be restored.");
+
+  if (!confirm(message)) return;
+
+  const idsToDelete = new Set(
+    selectedSales.map(sale => sale.id)
+  );
+
+  sales = sales.filter(sale => !idsToDelete.has(sale.id));
+
+  if (product) {
+    product.stock = Number(product.stock || 0) + quantityToRestore;
+
+    product.sold = Math.max(
+      0,
+      Number(product.sold || 0) - quantityToRestore
+    );
+  }
+
+  saveAll();
+  renderAdmin();
+
+  alert("The selected product's sales records have been deleted.");
+}
 
 function renderSalesReport() {
   const period =
     document.getElementById("reportPeriod")?.value || "today";
 
-  const now = new Date();
-
-  const filtered = sales.filter(sale => {
-    const date = new Date(sale.date);
-
-    if (period === "today") {
-      return date.toDateString() === now.toDateString();
-    }
-
-    if (period === "week") {
-      const start = new Date(now);
-      start.setDate(now.getDate() - 6);
-      start.setHours(0, 0, 0, 0);
-
-      return date >= start && date <= now;
-    }
-
-    if (period === "month") {
-      return date.getMonth() === now.getMonth() &&
-        date.getFullYear() === now.getFullYear();
-    }
-
-    if (period === "year") {
-      return date.getFullYear() === now.getFullYear();
-    }
-
-    return true;
-  });
+  const filtered = sales.filter(sale =>
+    saleMatchesPeriod(sale, period)
+  );
 
   const unitsSold = filtered.reduce(
     (sum, sale) => sum + Number(sale.quantity || 0), 0
   );
 
-  document.getElementById("periodSales").textContent =
-    "Units Sold: " + unitsSold;
+  const periodSales = document.getElementById("periodSales");
 
-  const productTotals = {};
+  if (periodSales) {
+    periodSales.textContent = "Units Sold: " + unitsSold;
+  }
+
+  const productTotals = new Map();
 
   filtered.forEach(sale => {
+    const key = getSaleProductKey(sale);
     const name = sale.productName || "Unknown Product";
 
-    productTotals[name] =
-      (productTotals[name] || 0) + Number(sale.quantity || 0);
+    if (!productTotals.has(key)) {
+      productTotals.set(key, {
+        name,
+        quantity: 0
+      });
+    }
+
+    productTotals.get(key).quantity += Number(sale.quantity || 0);
   });
 
   const report = document.getElementById("salesReport");
+  if (!report) return;
 
-  report.innerHTML = Object.keys(productTotals).length
-    ? `
-      <h3>Products Sold</h3>
-      ${Object.entries(productTotals).map(([name, quantity]) => `
-        <p>
-          <strong>${escapeHTML(name)}</strong>:
-          ${quantity} units sold
+  if (!productTotals.size) {
+    report.innerHTML = "<p>No sales recorded for this period.</p>";
+    return;
+  }
+
+  report.innerHTML = `
+    <h3>Products Sold</h3>
+
+    ${Array.from(productTotals.entries()).map(([key, item]) => `
+      <div class="sold-product-row"
+        style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; padding:12px; border-bottom:1px solid #ccc;">
+
+        <p style="margin:0;">
+          <strong>${escapeHTML(item.name)}</strong>:
+          ${item.quantity} units sold
         </p>
-      `).join("")}
-    `
-    : "<p>No sales recorded for this period.</p>";
+
+        <button
+          type="button"
+          class="action-btn delete-sale-btn"
+          data-sale-key="${escapeHTML(key)}"
+        >
+          Delete
+        </button>
+      </div>
+    `).join("")}
+  `;
+
+  report.querySelectorAll(".delete-sale-btn").forEach(button => {
+    button.addEventListener("click", function() {
+      deleteProductSales(button.dataset.saleKey);
+    });
+  });
 }
 
 /* BACKUP AND RESTORE */
@@ -727,7 +1182,8 @@ function restoreBackup() {
       cart = [];
       wishlist = [];
 
-      saveAll();
+      if (!saveAll()) return;
+
       renderAdmin();
 
       alert("Backup restored successfully.");
@@ -746,7 +1202,6 @@ document.addEventListener("DOMContentLoaded", function() {
     document.createTextNode(new Date().getFullYear())
   );
 
-  // Apply the selected language on the customer page.
   if (document.getElementById("languageBtn")) {
     document.querySelectorAll("[data-en][data-am]").forEach(element => {
       element.textContent = element.dataset[language];
@@ -758,7 +1213,6 @@ document.addEventListener("DOMContentLoaded", function() {
     renderProducts();
   }
 
-  // Keep the admin dashboard hidden until the PIN is entered.
   if (document.getElementById("adminDashboard")) {
     if (sessionStorage.getItem("cheval_admin_logged_in") === "yes") {
       openAdmin();
