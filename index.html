@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +6,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CHEVAL | Lighting Store</title>
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .auth-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .auth-box {
+      background: white;
+      color: #111;
+      width: 100%;
+      max-width: 420px;
+      padding: 28px;
+      border-radius: 12px;
+      position: relative;
+    }
+
+    .auth-box h2 {
+      margin-top: 0;
+    }
+
+    .auth-box input {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 13px;
+      margin: 12px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .auth-box button {
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .auth-close {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      border: none;
+      background: none;
+      font-size: 26px;
+    }
+
+    .auth-switch {
+      background: none;
+      border: none;
+      color: #ed1734;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    #authMessage {
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    #customerAccount {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+  </style>
 </head>
+
 <body>
 
   <div class="topbar">
@@ -28,11 +101,20 @@
       <a href="#wishlist" data-en="Wishlist" data-am="የወደድኳቸው">♥ Wishlist</a>
       <a href="admin.html" class="owner-btn">Owner Management</a>
       <button class="nav-icon" onclick="showSearch()" aria-label="Search">⌕</button>
-      <button class="nav-icon" onclick="customerLogin()" data-en="Login" data-am="ግባ">Login</button>
+
+      <button class="nav-icon" id="customerLoginButton" onclick="customerLogin()">
+        Login
+      </button>
+
+      <span id="customerAccount">
+        <span id="customerEmail"></span>
+        <button class="nav-icon" onclick="customerLogout()">Logout</button>
+      </span>
     </nav>
   </header>
 
   <main>
+
     <section class="hero" id="showroom">
       <div class="hero-content">
         <p class="eyebrow" data-en="WELCOME TO" data-am="እንኳን ወደ">WELCOME TO</p>
@@ -92,6 +174,7 @@
       <p data-en="Visit our store" data-am="ሱቃችንን ይጎብኙ">Visit our store</p>
       <p>Store location will be added when you provide the address.</p>
     </section>
+
   </main>
 
   <footer>
@@ -99,6 +182,56 @@
     <a href="admin.html">Owner Management</a>
   </footer>
 
+  <!-- CUSTOMER LOGIN AND REGISTRATION WINDOW -->
+
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-box">
+
+      <button class="auth-close" onclick="closeCustomerLogin()">×</button>
+
+      <h2 id="authTitle">Customer Login</h2>
+
+      <p id="authDescription">Login to your CHEVAL account.</p>
+
+      <form id="customerAuthForm">
+
+        <input
+          type="email"
+          id="customerAuthEmail"
+          placeholder="Email address"
+          required
+        >
+
+        <input
+          type="password"
+          id="customerAuthPassword"
+          placeholder="Password"
+          minlength="6"
+          required
+        >
+
+        <button type="submit" class="primary-btn" id="authSubmitButton">
+          Login
+        </button>
+
+      </form>
+
+      <p id="authMessage"></p>
+
+      <p>
+        Don't have an account?
+        <button class="auth-switch" id="authSwitchButton" onclick="switchCustomerAuth()">
+          Create account
+        </button>
+      </p>
+
+    </div>
+  </div>
+
+  <!-- SUPABASE CONNECTION -->
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+
 </body>
 </html>
