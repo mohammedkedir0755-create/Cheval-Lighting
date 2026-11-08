@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHEVAL | Owner Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-body">
+
+  <header class="admin-header">
+    <a href="index.html" class="admin-brand">
+      <img src="logo.jpg" alt="CHEVAL Logo">
+    </a>
+    <h2>Owner Management</h2>
+    <a href="index.html" class="secondary-btn">View Store</a>
+  </header>
+
+  <main class="admin-container">
+
+    <section id="loginPanel" class="admin-card login-card">
+      <h2>Owner Login</h2>
+      <p>Enter your management PIN.</p>
+      <input type="password" id="adminPin" placeholder="Enter PIN">
+      <button class="primary-btn" onclick="adminLogin()">Login</button>
+      <p id="loginError" class="error"></p>
+      <small>Demo PIN: 1234. This is not secure authentication for real business data.</small>
+    </section>
+
+    <div id="adminDashboard" hidden>
+
+      <div class="dashboard-title">
+        <div>
+          <h1>CHEVAL Management</h1>
+          <p>Manage products, inventory and stock.</p>
+        </div>
+        <button class="secondary-btn" onclick="adminLogout()">Logout</button>
+      </div>
+
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span>Total Products</span>
+          <strong id="totalProducts">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Items in Stock</span>
+          <strong id="totalStock">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Units Sold</span>
+          <strong id="totalSold">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Low-Stock Products</span>
+          <strong id="lowStockProducts">0</strong>
+        </div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Add a Product</h2>
+        <form id="productForm">
+
+          <label>Product Name *</label>
+          <input id="productName" required placeholder="Product name">
+
+          <label>Product Category *</label>
+          <select id="productCategory" required>
+            <option value="">Choose category</option>
+            <option>Chandeliers</option>
+            <option>Fauntain light 12W</option>
+            <option>Ceiling Lights</option>
+            <option>LED Bulbs</option>
+            <option>Wall Lights</option>
+            <option>Pendant Lights</option>
+            <option>Outdoor Lights</option>
+            <option>Decorative Lights</option>
+            <option>Spotlights</option>
+            <option>Strip Lights</option>
+            <option>Table and Floor Lamps</option>
+            <option>Smart Lighting</option>
+            <option>Electrical Accessories</option>
+            <option>Other</option>
+          </select>
+
+          <label>Selling Price (ETB) — Optional</label>
+          <input type="number" id="productPrice" min="0" step="0.01"
+            placeholder="Leave empty if you don't want to show a price">
+
+          <label>Initial Stock Quantity *</label>
+          <input type="number" id="productStock" min="0" step="1"
+            required placeholder="Enter quantity">
+
+          <label>Product Description — Optional</label>
+          <textarea id="productDescription"
+            placeholder="Describe your product..."></textarea>
+
+          <label>Product Photo *</label>
+          <input type="file" id="productPhoto" accept="image/*" required>
+
+          <button type="submit" class="primary-btn">Save Product</button>
+        </form>
+      </section>
+
+      <section class="admin-card">
+        <h2>Record a Sale</h2>
+        <p>Only the product and quantity are required. You can record a sale without entering a price.</p>
+
+        <form id="saleForm">
+          <label>Select Product *</label>
+          <select id="saleProduct" required></select>
+
+          <label>Quantity Sold *</label>
+          <input type="number" id="saleQuantity" min="1" step="1"
+            required placeholder="How many items were sold?">
+
+          <label>Selling Price Per Item (ETB) — Optional</label>
+          <input type="number" id="salePrice" min="0" step="0.01"
+            placeholder="Optional">
+
+          <button class="primary-btn" type="submit">Record Sale</button>
+        </form>
+
+        <p id="saleMessage"></p>
+      </section>
+
+      <section class="admin-card">
+        <h2>Inventory Management</h2>
+        <p>View remaining stock, edit products, and add newly received stock.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Remaining Stock</th>
+                <th>Sold</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Stock and Sales Reports</h2>
+
+        <div class="report-filters">
+          <label>Report period
+            <select id="reportPeriod" onchange="renderAdmin()">
+              <option value="today">Today</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="year">This year</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
+        </div>
+
+        <h3 id="periodSales">Units Sold: 0</h3>
+        <div id="salesReport"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Backup and Restore</h2>
+        <p>Download a copy of your products and stock records.</p>
+        <button class="primary-btn" onclick="downloadBackup()">Download Backup</button>
+
+        <label>Restore from backup</label>
+        <input type="file" id="restoreFile" accept=".json">
+        <button class="secondary-btn" onclick="restoreBackup()">Restore Backup</button>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

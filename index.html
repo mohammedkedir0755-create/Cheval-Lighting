@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHEVAL | Lighting Store</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <a href="tel:0911224766">☎ 0911224766</a>
+    <a href="https://t.me/+251911224766" target="_blank">✈ Telegram</a>
+    <span>📍 CHEVAL Lighting Store</span>
+    <button id="languageBtn" class="language-btn" onclick="toggleLanguage()">EN | አማ</button>
+  </div>
+
+  <header class="navbar">
+    <a href="#" class="brand">
+      <img src="logo.jpg" alt="CHEVAL Logo">
+    </a>
+
+    <nav>
+      <a href="#showroom" data-en="Showroom" data-am="ሾውሩም">Showroom</a>
+      <a href="#products" data-en="Products" data-am="ምርቶች">Products</a>
+      <a href="#contact" data-en="Contact" data-am="ያግኙን">Contact</a>
+      <a href="#cart" data-en="Order" data-am="ትዕዛዝ">🛒 Order <span id="cartCount">0</span></a>
+      <a href="#wishlist" data-en="Wishlist" data-am="የወደድኳቸው">♥ Wishlist</a>
+      <a href="admin.html" class="owner-btn">Owner Management</a>
+      <button class="nav-icon" onclick="showSearch()" aria-label="Search">⌕</button>
+      <button class="nav-icon" onclick="customerLogin()" data-en="Login" data-am="ግባ">Login</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="showroom">
+      <div class="hero-content">
+        <p class="eyebrow" data-en="WELCOME TO" data-am="እንኳን ወደ">WELCOME TO</p>
+        <h1>CHEVAL</h1>
+        <h2 data-en="Lighting That Brightens Your Life"
+            data-am="ሕይወትዎን የሚያበራ ብርሃን">
+          Lighting That Brightens Your Life
+        </h2>
+        <p data-en="Discover beautiful lighting for every space."
+           data-am="ለእያንዳንዱ ቦታ የሚስማማ ውብ መብራት ያግኙ።">
+          Discover beautiful lighting for every space.
+        </p>
+        <a class="primary-btn" href="#products"
+           data-en="Explore Our Products →"
+           data-am="ምርቶቻችንን ይመልከቱ →">
+          Explore Our Products →
+        </a>
+      </div>
+    </section>
+
+    <section class="section" id="products">
+      <div class="section-heading">
+        <div>
+          <span class="red-line"></span>
+          <h2 data-en="Our Products" data-am="የእኛ ምርቶች">Our Products</h2>
+        </div>
+        <input id="searchInput" type="search"
+          placeholder="Search products..."
+          oninput="renderProducts()">
+      </div>
+
+      <div class="category-list" id="categories"></div>
+
+      <div class="product-grid" id="productGrid">
+        <p class="empty-message">No products available yet.</p>
+      </div>
+    </section>
+
+    <section class="section light-section" id="wishlist">
+      <h2 data-en="♥ Your Wishlist" data-am="♥ የወደድኳቸው">♥ Your Wishlist</h2>
+      <div class="product-grid" id="wishlistGrid"></div>
+    </section>
+
+    <section class="section" id="cart">
+      <h2 data-en="Your Shopping Cart" data-am="የግዢ ዝርዝር">Your Shopping Cart</h2>
+      <div id="cartItems"></div>
+      <div class="cart-total" id="cartTotal">Total: 0 ETB</div>
+      <a class="primary-btn" id="orderButton" href="tel:0911224766">
+        Call CHEVAL to Order: 0911224766
+      </a>
+    </section>
+
+    <section class="contact-section" id="contact">
+      <h2 data-en="Contact CHEVAL" data-am="CHEVALን ያግኙ">Contact CHEVAL</h2>
+      <p>Phone: <a href="tel:0911224766">0911224766</a></p>
+      <p>Telegram: <a href="https://t.me/+251911224766" target="_blank">Contact us on Telegram</a></p>
+      <p data-en="Visit our store" data-am="ሱቃችንን ይጎብኙ">Visit our store</p>
+      <p>Store location will be added when you provide the address.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>© <span id="year"></span> CHEVAL Lighting Store. All rights reserved.</p>
+    <a href="admin.html">Owner Management</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
