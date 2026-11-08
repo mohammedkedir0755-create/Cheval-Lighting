@@ -1,4 +1,3 @@
-
 :root {
   --red: #ed101c;
   --black: #080808;
@@ -35,6 +34,8 @@ button {
   cursor: pointer;
 }
 
+/* TOP BAR */
+
 .topbar {
   min-height: 42px;
   background: var(--black);
@@ -54,6 +55,8 @@ button {
   color: white;
   font-weight: bold;
 }
+
+/* NAVIGATION */
 
 .navbar {
   min-height: 100px;
@@ -105,6 +108,8 @@ button {
   padding: 2px 6px;
 }
 
+/* HERO */
+
 .hero {
   min-height: 430px;
   display: flex;
@@ -140,6 +145,8 @@ button {
   line-height: 1.6;
 }
 
+/* BUTTONS */
+
 .primary-btn,
 .secondary-btn {
   display: inline-block;
@@ -163,6 +170,8 @@ button {
   background: var(--black);
   color: white;
 }
+
+/* GENERAL SECTIONS */
 
 .section {
   padding: 55px 5%;
@@ -208,6 +217,8 @@ input, select, textarea {
   background: white;
 }
 
+/* CATEGORIES */
+
 .category-list {
   display: flex;
   flex-wrap: wrap;
@@ -228,6 +239,8 @@ input, select, textarea {
   color: white;
   border-color: var(--red);
 }
+
+/* PRODUCT CARDS */
 
 .product-grid {
   display: grid;
@@ -264,10 +277,68 @@ input, select, textarea {
   font-weight: bold;
 }
 
-.stock-label {
-  color: #16843c;
-  font-size: 13px;
+.contact-price {
+  color: #555;
+  font-size: 14px;
 }
+
+/* CLICKABLE PRODUCT PHOTO */
+
+.product-photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  position: relative;
+  background: var(--gray);
+  overflow: hidden;
+}
+
+.product-photo-button img {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  transition: transform .3s ease;
+}
+
+.product-photo-button:hover img {
+  transform: scale(1.04);
+}
+
+.product-photo-button > span {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: #080808d9;
+  color: white;
+  padding: 7px 11px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.product-photo-button.no-product-photo {
+  height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #666;
+}
+
+.product-photo-button.no-product-photo > span {
+  position: static;
+  background: transparent;
+  color: #555;
+  font-size: 15px;
+}
+
+.product-photo-button.no-product-photo small {
+  color: var(--red);
+}
+
+/* PRODUCT ACTIONS */
 
 .product-actions {
   display: flex;
@@ -293,6 +364,13 @@ input, select, textarea {
   opacity: .8;
 }
 
+.stock-label {
+  color: #16843c;
+  font-size: 13px;
+}
+
+/* WISHLIST */
+
 .light-section {
   background: var(--gray);
 }
@@ -301,6 +379,8 @@ input, select, textarea {
   color: #777;
   padding: 20px 0;
 }
+
+/* SHOPPING CART */
 
 #cartItems {
   margin: 20px 0;
@@ -329,6 +409,8 @@ input, select, textarea {
   margin: 20px 0;
 }
 
+/* CONTACT */
+
 .contact-section {
   background: var(--black);
   color: white;
@@ -339,6 +421,8 @@ input, select, textarea {
 .contact-section a {
   color: #ff5360;
 }
+
+/* FOOTER */
 
 footer {
   background: #111;
@@ -419,6 +503,15 @@ footer {
   justify-self: start;
 }
 
+.photo-help {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: -5px;
+}
+
+/* DASHBOARD TITLE AND STATS */
+
 .dashboard-title {
   display: flex;
   align-items: center;
@@ -452,6 +545,8 @@ footer {
 .stat-card strong {
   font-size: 24px;
 }
+
+/* INVENTORY TABLE */
 
 .table-wrap {
   overflow-x: auto;
@@ -490,9 +585,149 @@ table img {
   color: white;
 }
 
+.photo-count {
+  display: inline-block;
+  font-size: 12px;
+  color: #555;
+  margin: 4px;
+}
+
 .error {
   color: var(--red);
 }
+
+/* PRODUCT PHOTO GALLERY */
+
+.gallery-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .85);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+}
+
+.gallery-window {
+  background: white;
+  width: 100%;
+  max-width: 750px;
+  max-height: 95vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  padding: 25px;
+  position: relative;
+  text-align: center;
+}
+
+.gallery-window h2 {
+  margin-top: 10px;
+  padding-right: 35px;
+}
+
+.gallery-close {
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  border: 0;
+  background: var(--red);
+  color: white;
+  font-size: 27px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+#galleryMainImage img {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  background: #f3f3f3;
+  border-radius: 8px;
+}
+
+.no-gallery-photo {
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f3f3;
+  color: #666;
+  border-radius: 8px;
+}
+
+.gallery-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.gallery-controls button {
+  border: 0;
+  background: var(--red);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.gallery-controls button:hover {
+  background: #bd101a;
+}
+
+#galleryCounter {
+  font-weight: bold;
+  color: #333;
+}
+
+.gallery-thumbnails {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gallery-thumb {
+  width: 75px;
+  height: 75px;
+  padding: 3px;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.gallery-thumb.active {
+  border-color: var(--red);
+}
+
+.gallery-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* OWNER MANAGEMENT BUTTON */
+
+.owner-btn {
+  background: #ed101c;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: bold;
+  display: inline-block;
+}
+
+.owner-btn:hover {
+  background: #b9000b;
+}
+
+/* RESPONSIVE DESIGN */
 
 @media (max-width: 750px) {
   .navbar {
@@ -528,7 +763,12 @@ table img {
     gap: 10px;
   }
 
-  .product-card img {
+  .product-card img,
+  .product-photo-button img {
+    height: 145px;
+  }
+
+  .product-photo-button.no-product-photo {
     height: 145px;
   }
 
@@ -543,17 +783,18 @@ table img {
   .product-actions {
     flex-direction: column;
   }
-}
-.owner-btn {
-    background: #ed101c;
-    color: white;
-    padding: 12px 18px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: bold;
-    display: inline-block;
-}
 
-.owner-btn:hover {
-    background: #b9000b;
+  .gallery-window {
+    padding: 15px;
+  }
+
+  .gallery-controls button {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .gallery-thumb {
+    width: 60px;
+    height: 60px;
+  }
 }
